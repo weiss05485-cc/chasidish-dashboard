@@ -1,0 +1,15 @@
+config.py
+__pycache__/
+*.pyc
+.claude/
+
+# local automation scripts (contain tokens — not for repo)
+decrypt_chasidish.ps1
+diagnose_stock.py
+sync_loop.ps1
+trigger_sync.bat
+setup_sync_task.ps1
+הפעל_סינכרון_אוטומטי.bat
+explore_*.py
+check_*.py
+*_output.txt
