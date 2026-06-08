@@ -51,7 +51,7 @@ cur.execute("""
         ISNULL(SUM(t.Total), 0)               AS TotalSales,
         COUNT(DISTINCT t.TransactionID)       AS Transactions
     FROM [Transaction] t
-    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1 AND st.Code<>'3'
+    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1
     WHERE t.Status > -1
       AND t.TransactionType NOT IN (14, 21)
     GROUP BY CONVERT(VARCHAR(10), t.SaleTime, 23), st.StoreID, st.StoreName
@@ -73,7 +73,7 @@ cur.execute("""
         SUM(te.Total)                          AS TotalSales
     FROM TransactionEntry te
     JOIN [Transaction] t  ON te.TransactionID = t.TransactionID
-    JOIN Store st         ON t.StoreID = st.StoreID AND st.Status=1 AND st.Code<>'3'
+    JOIN Store st         ON t.StoreID = st.StoreID AND st.Status=1
     LEFT JOIN Department d ON te.DepartmentID = d.DepartmentID
     WHERE t.Status > -1 AND te.Status > -1
       AND te.TransactionEntryType NOT IN (4,10,12,16)
@@ -96,7 +96,7 @@ cur.execute("""
         SUM(t.Total)                                                    AS TotalSales,
         COUNT(DISTINCT t.TransactionID)                                 AS Transactions
     FROM [Transaction] t
-    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1 AND st.Code<>'3'
+    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1
     LEFT JOIN Users u ON u.UserId = t.SellerID AND u.Status=1
     WHERE t.Status > -1
       AND t.TransactionType NOT IN (14, 21)
@@ -118,7 +118,7 @@ cur.execute("""
         ISNULL(SUM(t.Total), 0)               AS TotalSales,
         COUNT(DISTINCT t.TransactionID)       AS Transactions
     FROM [Transaction] t
-    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1 AND st.Code<>'3'
+    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1
     WHERE t.Status > -1
       AND t.TransactionType NOT IN (14, 21)
     GROUP BY CONVERT(VARCHAR(10), t.SaleTime, 23)
@@ -147,7 +147,7 @@ cur.execute("""
             1                                                            AS Cnt
         FROM TenderEntry te
         JOIN [Transaction] t  ON te.TransactionID = t.TransactionID
-        JOIN Store st         ON t.StoreID = st.StoreID AND st.Status=1 AND st.Code<>'3'
+        JOIN Store st         ON t.StoreID = st.StoreID AND st.Status=1
         LEFT JOIN Tender tn   ON te.TenderID = tn.TenderID
         WHERE t.Status > -1
           AND te.Status > -1
@@ -162,7 +162,7 @@ cur.execute("""
             1                                     AS Cnt
         FROM TransactionEntry tei
         JOIN [Transaction] t  ON tei.TransactionID = t.TransactionID
-        JOIN Store st         ON t.StoreID = st.StoreID AND st.Status=1 AND st.Code<>'3'
+        JOIN Store st         ON t.StoreID = st.StoreID AND st.Status=1
         WHERE t.Status > -1
           AND tei.Status > -1
           AND tei.TransactionEntryType = 18
@@ -334,7 +334,7 @@ cur.execute("""
         COUNT(DISTINCT t.TransactionID)     AS Transactions,
         CAST(ISNULL(SUM(t.Total),0) AS DECIMAL(18,2)) AS TotalSales
     FROM [Transaction] t
-    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1 AND st.Code<>'3'
+    JOIN Store st ON t.StoreID = st.StoreID AND st.Status=1
     WHERE t.Status > -1
       AND t.TransactionType NOT IN (14, 21)
       AND t.SaleTime >= DATEADD(DAY, -90, GETDATE())
