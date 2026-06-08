@@ -29,6 +29,7 @@ def _load_databases():
             'name':     _val(prefix + '_NAME'),
             'user':     _val(prefix + '_USER'),
             'password': _val(prefix + '_PASSWORD'),
+            'label':    _val(prefix + '_LABEL'),   # תווית סניף (אופציונלי) — למניעת התנגשות שמות חנויות
         })
     if not dbs:
         raise RuntimeError("לא הוגדרו פרטי חיבור ל-DB (DB_SERVER וכו')")
@@ -439,6 +440,24 @@ def build_db(conn):
     }
 
 
+def relabel(part, label):
+    """מוסיף תווית סניף לשמות החנויות כדי שסניפים שונים לא יתנגשו."""
+    pre = label + " - "
+    for s in part['store_summary']:
+        s['StoreName'] = pre + s['StoreName']
+    for s in part['by_department']:
+        s['StoreName'] = pre + s['StoreName']
+    for it in part['sales_items']:
+        it['st'] = pre + it['st']
+    for it in part['search_items']:
+        it['s'] = {pre + k: v for k, v in it['s'].items()}
+    for it in part['report_items']:
+        it['s'] = {pre + k: v for k, v in it['s'].items()}
+    for u in part['users_list']:
+        u['store'] = label
+    return part
+
+
 def main():
     merged = {'store_summary': [], 'low_stock': [], 'by_department': [],
               'search_items': [], 'report_items': [], 'sales_items': [], 'users_list': []}
@@ -450,6 +469,8 @@ def main():
         finally:
             try: conn.close()
             except Exception: pass
+        if cfg.get('label'):
+            part = relabel(part, cfg['label'])
         for k in merged:
             merged[k].extend(part[k])
         print(f"  ✓ {cfg['name']}: {len(part['sales_items'])} sales rows, {len(part['store_summary'])} stores")

@@ -22,7 +22,8 @@ def _load_databases():
         if not srv:
             continue
         dbs.append({'server': srv, 'name': _val(prefix + '_NAME'),
-                    'user': _val(prefix + '_USER'), 'password': _val(prefix + '_PASSWORD')})
+                    'user': _val(prefix + '_USER'), 'password': _val(prefix + '_PASSWORD'),
+                    'label': _val(prefix + '_LABEL')})
     if not dbs:
         raise RuntimeError("לא הוגדרו פרטי חיבור ל-DB")
     return dbs
@@ -328,11 +329,18 @@ def main():
         print(f"Connecting to {cfg['name']}@{cfg['server']} ...")
         conn = _connect(cfg)
         try:
-            parts.append(collect(conn))
+            part = collect(conn)
         finally:
             try: conn.close()
             except Exception: pass
-        print(f"  ✓ {cfg['name']}: {len(parts[-1]['daily'])} ימים")
+        if cfg.get('label'):
+            pre = cfg['label'] + " - "
+            for r in part['stores']:
+                r['StoreName'] = pre + r['StoreName']
+            for r in part['hours']:
+                r['StoreName'] = pre + r['StoreName']
+        parts.append(part)
+        print(f"  ✓ {cfg['name']}: {len(part['daily'])} ימים")
 
     # מיזוג בין הסניפים
     def cat(key): return [r for p in parts for r in p[key]]
