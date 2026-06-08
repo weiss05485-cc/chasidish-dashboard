@@ -38,6 +38,7 @@ jobs:
           DB2_NAME:     ${{ secrets.DB2_NAME }}
           DB2_USER:     ${{ secrets.DB2_USER }}
           DB2_PASSWORD: ${{ secrets.DB2_PASSWORD }}
+          DB2_LABEL:    ${{ secrets.DB2_LABEL }}
         run: |
           python sync.py
           python sync_today.py
