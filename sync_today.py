@@ -334,11 +334,11 @@ def main():
             try: conn.close()
             except Exception: pass
         if cfg.get('label'):
-            pre = cfg['label'] + " - "
+            lbl = cfg['label']
             for r in part['stores']:
-                r['StoreName'] = pre + r['StoreName']
+                r['StoreName'] = lbl
             for r in part['hours']:
-                r['StoreName'] = pre + r['StoreName']
+                r['StoreName'] = lbl
         parts.append(part)
         print(f"  ✓ {cfg['name']}: {len(part['daily'])} ימים")
 

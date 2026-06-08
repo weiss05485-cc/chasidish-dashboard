@@ -441,18 +441,17 @@ def build_db(conn):
 
 
 def relabel(part, label):
-    """מוסיף תווית סניף לשמות החנויות כדי שסניפים שונים לא יתנגשו."""
-    pre = label + " - "
+    """מתייג סניף כחנות עצמאית בשם התווית, כדי שלא יתנגש עם סניפים אחרים."""
     for s in part['store_summary']:
-        s['StoreName'] = pre + s['StoreName']
+        s['StoreName'] = label
     for s in part['by_department']:
-        s['StoreName'] = pre + s['StoreName']
+        s['StoreName'] = label
     for it in part['sales_items']:
-        it['st'] = pre + it['st']
+        it['st'] = label
     for it in part['search_items']:
-        it['s'] = {pre + k: v for k, v in it['s'].items()}
+        it['s'] = {label: sum(it['s'].values())}
     for it in part['report_items']:
-        it['s'] = {pre + k: v for k, v in it['s'].items()}
+        it['s'] = {label: sum(it['s'].values())}
     for u in part['users_list']:
         u['store'] = label
     return part
