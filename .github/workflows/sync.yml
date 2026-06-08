@@ -1,0 +1,54 @@
+name: Sync Sales Data
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # כל 5 דקות
+  workflow_dispatch:        # כפתור הפעלה ידנית
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Jerusalem
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install pymssql
+
+      - name: Run sync
+        env:
+          DB_SERVER:   ${{ secrets.DB_SERVER }}
+          DB_NAME:     ${{ secrets.DB_NAME }}
+          DB_USER:     ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          python sync.py
+          python sync_today.py
+
+      - name: Commit and push
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git add docs/today.json docs/data.json docs/search.json docs/reports.json docs/users.json docs/sales.json
+          git diff --staged --quiet && echo "אין שינויים — מדלג" && exit 0
+          git commit -m "Auto-sync $(date +'%d/%m/%Y %H:%M')"
+          # push עמיד להתנגשויות: בקונפליקט מעדיפים את הנתונים הטריים (-X theirs), עם ניסיון חוזר על מירוץ בין ריצות
+          for i in 1 2 3 4 5; do
+            git pull --rebase -X theirs origin master && git push && exit 0
+            echo "ניסיון $i נכשל (קונפליקט/מירוץ) — מנסה שוב..."
+            sleep 3
+          done
+          echo "ה-push נכשל אחרי 5 ניסיונות" && exit 1
