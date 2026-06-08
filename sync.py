@@ -374,9 +374,9 @@ def main():
     cur.execute("""
         SELECT
             u.UserNo,
-            u.UserName,
+            CAST(u.UserName AS NVARCHAR(200)) AS UserName,
             u.Password,
-            LTRIM(RTRIM(ISNULL(u.UserFName,'') + ' ' + ISNULL(u.UserLName,''))) AS FullName,
+            LTRIM(RTRIM(ISNULL(CAST(u.UserFName AS NVARCHAR(200)),'') + N' ' + ISNULL(CAST(u.UserLName AS NVARCHAR(200)),''))) AS FullName,
             CAST(u.IsSuperAdmin AS INT) AS IsAdmin,
             u.RoleID,
             (SELECT TOP 1 st2.Code
