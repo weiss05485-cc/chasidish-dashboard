@@ -7,25 +7,46 @@ from datetime import datetime
 from decimal import Decimal
 
 # credentials מ-config.py (מקומי) או environment variables (GitHub Actions)
+# תומך במספר מסדים (סניפים): DB_* הוא הראשי, DB2_*/DB3_* אופציונליים — כולם מתאחדים לאותו דשבורד.
 try:
-    from config import DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD
+    import config as _cfg
 except ImportError:
-    DB_SERVER   = os.environ['DB_SERVER']
-    DB_NAME     = os.environ['DB_NAME']
-    DB_USER     = os.environ['DB_USER']
-    DB_PASSWORD = os.environ['DB_PASSWORD']
+    _cfg = None
 
-def _connect():
+def _val(name):
+    if _cfg is not None and hasattr(_cfg, name):
+        return getattr(_cfg, name)
+    return os.environ.get(name)
+
+def _load_databases():
+    dbs = []
+    for prefix in ('DB', 'DB2', 'DB3', 'DB4'):
+        srv = _val(prefix + '_SERVER')
+        if not srv:
+            continue
+        dbs.append({
+            'server':   srv,
+            'name':     _val(prefix + '_NAME'),
+            'user':     _val(prefix + '_USER'),
+            'password': _val(prefix + '_PASSWORD'),
+        })
+    if not dbs:
+        raise RuntimeError("לא הוגדרו פרטי חיבור ל-DB (DB_SERVER וכו')")
+    return dbs
+
+DATABASES = _load_databases()
+
+def _connect(cfg):
     """חיבור לDB — pyodbc על Windows, pymssql על Linux (GitHub Actions)"""
     try:
         import pyodbc
-        CONN_STR = (f"DRIVER={{SQL Server}};SERVER={DB_SERVER};DATABASE={DB_NAME};"
-                    f"UID={DB_USER};PWD={DB_PASSWORD};Connection Timeout=15;")
+        CONN_STR = (f"DRIVER={{SQL Server}};SERVER={cfg['server']};DATABASE={cfg['name']};"
+                    f"UID={cfg['user']};PWD={cfg['password']};Connection Timeout=15;")
         return pyodbc.connect(CONN_STR, timeout=15)
     except Exception:
         import pymssql
-        return pymssql.connect(server=DB_SERVER, user=DB_USER,
-                               password=DB_PASSWORD, database=DB_NAME,
+        return pymssql.connect(server=cfg['server'], user=cfg['user'],
+                               password=cfg['password'], database=cfg['name'],
                                timeout=15, login_timeout=15)
 
 BARCODE_RE = re.compile(r'^(\d{2})([A-Za-z]+)(\d{2})([A-Za-z0-9]{2})(.+)$', re.IGNORECASE)
@@ -58,9 +79,7 @@ ONHAND_CTE = """
     )
 """
 
-def main():
-    print("Connecting to SQL Server...")
-    conn = _connect()
+def build_db(conn):
     cur = conn.cursor()
 
     print("  Store summary...")
@@ -409,33 +428,61 @@ def main():
             'store':   store,
         })
 
-    conn.close()
+    return {
+        'store_summary': store_summary,
+        'low_stock':     low_stock,
+        'by_department': by_department,
+        'search_items':  search_items,
+        'report_items':  report_items,
+        'sales_items':   sales_items,
+        'users_list':    users_list,
+    }
+
+
+def main():
+    merged = {'store_summary': [], 'low_stock': [], 'by_department': [],
+              'search_items': [], 'report_items': [], 'sales_items': [], 'users_list': []}
+    for cfg in DATABASES:
+        print(f"Connecting to {cfg['name']}@{cfg['server']} ...")
+        conn = _connect(cfg)
+        try:
+            part = build_db(conn)
+        finally:
+            try: conn.close()
+            except Exception: pass
+        for k in merged:
+            merged[k].extend(part[k])
+        print(f"  ✓ {cfg['name']}: {len(part['sales_items'])} sales rows, {len(part['store_summary'])} stores")
+
+    # dedupe users by (user, hash) — מונע כפילות אם אותו אדם קיים בשני סניפים
+    seen = set(); uniq = []
+    for u in merged['users_list']:
+        key = (u['user'], u['hash'])
+        if key in seen:
+            continue
+        seen.add(key); uniq.append(u)
+    merged['users_list'] = uniq
 
     os.makedirs("docs", exist_ok=True)
-
     main_data = {
         "last_updated": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "store_summary": store_summary,
-        "low_stock": low_stock,
-        "by_department": by_department,
+        "store_summary": merged['store_summary'],
+        "low_stock": merged['low_stock'],
+        "by_department": merged['by_department'],
     }
     with open("docs/data.json", "w", encoding="utf-8") as f:
         json.dump(main_data, f, ensure_ascii=False, default=serial)
-
     with open("docs/search.json", "w", encoding="utf-8") as f:
-        json.dump(search_items, f, ensure_ascii=False, default=serial)
-
+        json.dump(merged['search_items'], f, ensure_ascii=False, default=serial)
     with open("docs/reports.json", "w", encoding="utf-8") as f:
-        json.dump(report_items, f, ensure_ascii=False, default=serial)
-
+        json.dump(merged['report_items'], f, ensure_ascii=False, default=serial)
     with open("docs/sales.json", "w", encoding="utf-8") as f:
-        json.dump(sales_items, f, ensure_ascii=False, default=serial)
-
+        json.dump(merged['sales_items'], f, ensure_ascii=False, default=serial)
     with open("docs/users.json", "w", encoding="utf-8") as f:
-        json.dump(users_list, f, ensure_ascii=False)
+        json.dump(merged['users_list'], f, ensure_ascii=False)
 
-    print(f"Done. {len(search_items)} search | {len(report_items)} report | {len(sales_items)} sales rows")
-    for s in store_summary:
+    print(f"Done. {len(merged['search_items'])} search | {len(merged['report_items'])} report | {len(merged['sales_items'])} sales rows")
+    for s in merged['store_summary']:
         print(f"  {s['StoreName']}: {s['InStock']} in stock / {int(s['TotalUnits'])} units / {int(s['StockValue']):,}")
 
 if __name__ == "__main__":

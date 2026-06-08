@@ -5,7 +5,10 @@ __pycache__/
 
 # local automation scripts (contain tokens — not for repo)
 decrypt_chasidish.ps1
+decrypt_branch.ps1
 diagnose_stock.py
+stores_check.py
+deploy.ps1
 sync_loop.ps1
 trigger_sync.bat
 setup_sync_task.ps1
