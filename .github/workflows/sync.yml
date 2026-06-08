@@ -34,6 +34,10 @@ jobs:
           DB_NAME:     ${{ secrets.DB_NAME }}
           DB_USER:     ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB2_SERVER:   ${{ secrets.DB2_SERVER }}
+          DB2_NAME:     ${{ secrets.DB2_NAME }}
+          DB2_USER:     ${{ secrets.DB2_USER }}
+          DB2_PASSWORD: ${{ secrets.DB2_PASSWORD }}
         run: |
           python sync.py
           python sync_today.py
