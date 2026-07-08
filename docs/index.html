@@ -430,28 +430,16 @@ body.emp-mode .price-col{display:none!important}
 </header>
 
 <nav>
-  <button class="nav-btn active" onclick="showPage('overview')">📊 סקירה כללית</button>
-  <button class="nav-btn" onclick="showPage('search')">🔍 חיפוש מוצרים</button>
-  <button class="nav-btn" onclick="showPage('departments')">📂 מחלקות</button>
-  <button class="nav-btn" onclick="showPage('lowstock')">⚠️ חוסרים</button>
-  <button class="nav-btn" onclick="showPage('reports')">📋 דוחות מלאי</button>
+  <button class="nav-btn active" onclick="showPage('today')">🏪 קופות יומי</button>
   <button class="nav-btn" onclick="showPage('sales')">📈 מכירות</button>
-  <button class="nav-btn" onclick="showPage('today')">🏪 קופות יומי</button>
-  <button class="nav-btn" onclick="showPage('orders')">📋 הזמנות</button>
-  <button class="nav-btn" onclick="showPage('planner')">📦 תכנון הזמנה</button>
+  <button class="nav-btn" onclick="showPage('promos')">🎯 מבצעים</button>
   <button class="nav-btn" onclick="showPage('hours')">🕐 שעות עבודה</button>
 </nav>
 
 <div id="bottom-nav">
-  <button class="bnav-btn active" onclick="showPage('overview')"><span class="bnav-icon">📊</span>סקירה</button>
-  <button class="bnav-btn" onclick="showPage('search')"><span class="bnav-icon">🔍</span>חיפוש</button>
-  <button class="bnav-btn" onclick="showPage('departments')"><span class="bnav-icon">📂</span>מחלקות</button>
-  <button class="bnav-btn" onclick="showPage('lowstock')"><span class="bnav-icon">⚠️</span>חוסרים</button>
-  <button class="bnav-btn" onclick="showPage('reports')"><span class="bnav-icon">📋</span>דוחות</button>
+  <button class="bnav-btn active" onclick="showPage('today')"><span class="bnav-icon">🏪</span>קופות</button>
   <button class="bnav-btn" onclick="showPage('sales')"><span class="bnav-icon">📈</span>מכירות</button>
-  <button class="bnav-btn" onclick="showPage('today')"><span class="bnav-icon">🏪</span>קופות</button>
-  <button class="bnav-btn" onclick="showPage('orders')"><span class="bnav-icon">📋</span>הזמנות</button>
-  <button class="bnav-btn" onclick="showPage('planner')"><span class="bnav-icon">📦</span>תכנון</button>
+  <button class="bnav-btn" onclick="showPage('promos')"><span class="bnav-icon">🎯</span>מבצעים</button>
   <button class="bnav-btn" onclick="showPage('hours')"><span class="bnav-icon">🕐</span>שעות</button>
 </div>
 
@@ -463,6 +451,36 @@ body.emp-mode .price-col{display:none!important}
 <div id="page-hours" class="page">
 <div class="container">
   <div id="hours-root"><div style="color:var(--muted);padding:24px;text-align:center">טוען…</div></div>
+</div>
+</div>
+
+<!-- PAGE: PROMOS (מבצעים) -->
+<div id="page-promos" class="page">
+<div class="container">
+  <div class="section" style="padding:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+      <div style="font-size:18px;font-weight:800;color:var(--navy)">🎯 מימושי מבצעים</div>
+      <input id="promos-search" type="search" placeholder="🔍 חיפוש מבצע..." oninput="renderPromosRows()"
+        style="padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;min-width:180px">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 10px">
+      <span style="font-size:12px;color:var(--muted)">📅 תקופה:</span>
+      <select id="promos-from" onchange="renderPromosRows()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"></select>
+      <span style="font-size:12px;color:var(--muted)">עד</span>
+      <select id="promos-to" onchange="renderPromosRows()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"></select>
+      <button class="btn" onclick="promoQuick('all')" style="font-size:11px;padding:4px 10px">הכל</button>
+      <button class="btn" onclick="promoQuick('month')" style="font-size:11px;padding:4px 10px">החודש</button>
+      <button class="btn" onclick="promoQuick('year')" style="font-size:11px;padding:4px 10px">השנה</button>
+    </div>
+    <div id="promos-synced" style="font-size:11px;color:var(--muted);margin-bottom:12px"></div>
+    <div id="promos-summary" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead id="promos-thead"></thead>
+        <tbody id="promos-body"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -2378,8 +2396,8 @@ function renderComparison() {
 }
 
 /* ========== AUTH ========== */
-const EMP_PAGES = new Set(['search', 'lowstock', 'orders']);
-const ALL_PAGES = ['overview','search','departments','lowstock','reports','sales','today','orders','planner'];
+const EMP_PAGES = new Set(['today']);
+const ALL_PAGES = ['today','sales','promos','hours'];
 
 // ── Users from Arnet (users.json) ──
 let _usersCache = null;
@@ -2432,7 +2450,7 @@ function checkAuth() {
     document.getElementById('login-overlay').style.display = 'none';
     const userInfo = JSON.parse(localStorage.getItem('cc_user') || '{}');
     applyRole(role, userInfo);
-    showPage(role === 'emp' ? 'search' : 'today');
+    showPage('today');
   }
 }
 
@@ -2470,7 +2488,7 @@ async function doLogin() {
   localStorage.setItem('cc_user', JSON.stringify(userInfo));
   document.getElementById('login-overlay').style.display = 'none';
   applyRole(user.role, userInfo);
-  showPage(user.role === 'emp' ? 'search' : 'today');
+  showPage('today');
 }
 
 function applyRole(role, userInfo) {
@@ -2508,7 +2526,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  const labels = {overview:0, search:1, departments:2, lowstock:3, reports:4, sales:5, today:6, orders:7, planner:8, hours:9};
+  const labels = {today:0, sales:1, promos:2, hours:3};
   const navBtns  = document.querySelectorAll('.nav-btn');
   const bnavBtns = document.querySelectorAll('.bnav-btn');
   if (navBtns[labels[id]])  navBtns[labels[id]].classList.add('active');
@@ -2524,6 +2542,7 @@ function showPage(id) {
   if (id === 'orders')   { renderOrdersPage(); syncOrdersFromGitHub(); }
   if (id === 'planner')  initOrderPlanner();
   if (id === 'hours')    renderHours();
+  if (id === 'promos')   renderPromos();
 }
 
 /* ========== שעות עבודה (נוכחות עובדים) ========== */
@@ -2625,6 +2644,129 @@ function _renderHours() {
         <span>${list.length} עובדים · לחיצה על עובד פותחת פירוט יומי</span><span>סה"כ ${_hoursHM(totalHours)} שעות</span></div>
       ${summary}
     </div>`;
+}
+
+/* ========== מבצעים (מימושי מבצעים) ========== */
+let PROMOS_DATA = null;
+let _promoStores = [];
+let _promoMonths = [];
+function _promoMoney(n) { return '₪' + Math.round(n || 0).toLocaleString('he-IL'); }
+function _ymLabel(ym) { const a = ym.split('-'); return a[1] + '/' + a[0]; }
+function _promoPct(name) {
+  if (!name) return null;
+  const m = String(name).match(/(\d{1,2})\s*(?:%|אחוז|הנחה)/);
+  if (m) return parseInt(m[1], 10);
+  const nums = (String(name).match(/\d+/g) || []).map(Number).filter(n => n >= 10 && n <= 60 && String(n).length < 4);
+  return nums.length === 1 ? nums[0] : null;
+}
+
+function renderPromos() {
+  if (PROMOS_DATA) { renderPromosRows(); return; }
+  const body = document.getElementById('promos-body');
+  if (body) body.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--muted)">טוען…</td></tr>';
+  const apply = (d) => {
+    PROMOS_DATA = { synced: d.synced, promos: d.promos || [] };
+    const stores = new Set(), months = new Set();
+    (PROMOS_DATA.promos || []).forEach(p => { const mm = p.monthly || {}; Object.keys(mm).forEach(ym => { months.add(ym); Object.keys(mm[ym]).forEach(s => stores.add(s)); }); });
+    _promoStores = [...stores].sort((a, b) => a.localeCompare(b, 'he'));
+    _promoMonths = [...months].sort().reverse();
+    const syncEl = document.getElementById('promos-synced'); if (syncEl) syncEl.textContent = 'עודכן: ' + (d.synced || '');
+    const opts = _promoMonths.map(ym => `<option value="${ym}">${_ymLabel(ym)}</option>`).join('');
+    const fromSel = document.getElementById('promos-from'), toSel = document.getElementById('promos-to');
+    fromSel.innerHTML = opts; toSel.innerHTML = opts;
+    if (_promoMonths.length) { fromSel.value = _promoMonths[_promoMonths.length - 1]; toSel.value = _promoMonths[0]; }
+    renderPromosRows();
+  };
+  if (TODAY_DATA && TODAY_DATA.promos) { apply(TODAY_DATA); return; }
+  fetch('today.json?t=' + Date.now()).then(r => { if (!r.ok) throw new Error('404'); return r.json(); })
+    .then(d => { if (!TODAY_DATA) TODAY_DATA = d; apply(d); })
+    .catch(() => { if (body) body.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--muted)">אין נתוני מבצעים עדיין — יתעדכנו בסנכרון הבא</td></tr>'; });
+}
+
+function promoQuick(kind) {
+  if (!_promoMonths.length) return;
+  const fromSel = document.getElementById('promos-from'), toSel = document.getElementById('promos-to');
+  const latest = _promoMonths[0], earliest = _promoMonths[_promoMonths.length - 1];
+  if (kind === 'all')        { fromSel.value = earliest; toSel.value = latest; }
+  else if (kind === 'month') { fromSel.value = latest;   toSel.value = latest; }
+  else if (kind === 'year')  { const y = latest.slice(0, 4); const inY = _promoMonths.filter(m => m.startsWith(y));
+                               fromSel.value = inY[inY.length - 1]; toSel.value = inY[0]; }
+  renderPromosRows();
+}
+
+function _promoAggregate(p, fromYM, toYM) {
+  const out = {};
+  const add = (s, q, t) => { if (!out[s]) out[s] = { qty: 0, total: 0 }; out[s].qty += q; out[s].total += t; };
+  if (p.monthly) {
+    Object.keys(p.monthly).forEach(ym => {
+      if (ym >= fromYM && ym <= toYM) Object.entries(p.monthly[ym]).forEach(([s, v]) => add(s, v.qty || 0, v.total || 0));
+    });
+  }
+  return out;
+}
+
+function renderPromosRows() {
+  if (!PROMOS_DATA) return;
+  const term   = (document.getElementById('promos-search').value || '').trim();
+  const fromYM = document.getElementById('promos-from').value || '0000-00';
+  const toYM   = document.getElementById('promos-to').value   || '9999-99';
+
+  let rows = (PROMOS_DATA.promos || []).map(p => {
+    const stores = _promoAggregate(p, fromYM, toYM);
+    const totQty = Object.values(stores).reduce((s, v) => s + v.qty, 0);
+    const totAmt = Object.values(stores).reduce((s, v) => s + v.total, 0);
+    const pct    = _promoPct(p.name);
+    const gross  = pct ? totAmt / (pct / 100) : null;
+    const net    = gross != null ? gross - totAmt : null;
+    return { id: p.id, name: p.name, stores, totQty, totAmt, pct, gross, net };
+  }).filter(r => r.totQty > 0 || r.totAmt > 0);
+  if (term) rows = rows.filter(r => (r.name || '').includes(term) || String(r.id).includes(term));
+  rows.sort((a, b) => b.totAmt - a.totAmt);
+
+  document.getElementById('promos-thead').innerHTML = `<tr>
+    <th style="text-align:right;padding:8px;border-bottom:2px solid var(--border);min-width:200px">מבצע</th>
+    ${_promoStores.map(s => `<th style="text-align:center;padding:8px;border-bottom:2px solid var(--border)">${s}<br><span style="font-size:10px;color:var(--muted);font-weight:400">כמות · הנחה ₪</span></th>`).join('')}
+    <th style="text-align:center;padding:8px;border-bottom:2px solid var(--border);color:var(--navy)">סה״כ<br><span style="font-size:10px;font-weight:400">כמות · הנחה ₪</span></th>
+    <th style="text-align:center;padding:8px;border-bottom:2px solid var(--border)">%</th>
+    <th style="text-align:center;padding:8px;border-bottom:2px solid var(--border);color:#7c3aed">סך קניות<br><span style="font-size:10px;font-weight:400">לפני הנחה</span></th>
+    <th style="text-align:center;padding:8px;border-bottom:2px solid var(--border);color:#0369a1">שולם בפועל</th>
+  </tr>`;
+
+  const grandQty   = rows.reduce((s, r) => s + r.totQty, 0);
+  const grandAmt   = rows.reduce((s, r) => s + r.totAmt, 0);
+  const grandGross = rows.reduce((s, r) => s + (r.gross || 0), 0);
+  const grandNet   = rows.reduce((s, r) => s + (r.net || 0), 0);
+  document.getElementById('promos-summary').innerHTML =
+    `<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:8px 14px;font-size:13px"><b>${rows.length}</b> מבצעים</div>
+     <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:8px 14px;font-size:13px">סה״כ מימושים: <b>${Math.round(grandQty).toLocaleString('he-IL')}</b></div>
+     <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:8px 14px;font-size:13px">סה״כ הנחות: <b>${_promoMoney(grandAmt)}</b></div>
+     <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:8px 14px;font-size:13px">סך קניות (לפי %): <b>${_promoMoney(grandGross)}</b></div>
+     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:8px 14px;font-size:13px">שולם בפועל: <b>${_promoMoney(grandNet)}</b></div>`;
+
+  const body = document.getElementById('promos-body');
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="${_promoStores.length + 5}" style="padding:20px;text-align:center;color:var(--muted)">לא נמצאו מבצעים בתקופה</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const cells = _promoStores.map(s => {
+      const st = r.stores[s];
+      if (!st) return `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;color:#cbd5e1">—</td>`;
+      return `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9">${Math.round(st.qty).toLocaleString('he-IL')} · <span style="color:#059669;font-weight:600">${_promoMoney(st.total)}</span></td>`;
+    }).join('');
+    const pctCell   = r.pct   ? `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;font-weight:700">${r.pct}%</td>`
+                              : `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;color:#cbd5e1">—</td>`;
+    const grossCell = r.gross != null ? `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;font-weight:700;color:#7c3aed">${_promoMoney(r.gross)}</td>`
+                                      : `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;color:#cbd5e1">—</td>`;
+    const netCell   = r.net != null ? `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;color:#0369a1">${_promoMoney(r.net)}</td>`
+                                    : `<td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;color:#cbd5e1">—</td>`;
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #f2f4f9">${r.name || ('מבצע ' + r.id)}</td>
+      ${cells}
+      <td style="text-align:center;padding:6px;border-bottom:1px solid #f2f4f9;font-weight:700;color:var(--navy)">${Math.round(r.totQty).toLocaleString('he-IL')} · ${_promoMoney(r.totAmt)}</td>
+      ${pctCell}${grossCell}${netCell}
+    </tr>`;
+  }).join('');
 }
 
 /* ========== OVERVIEW ========== */

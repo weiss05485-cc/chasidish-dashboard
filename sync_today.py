@@ -351,12 +351,46 @@ def collect(conn):
         print("PRESENCE_QUERY_ERROR:", repr(e))
         presence_raw = []
 
+    # ── 10. מימושי מבצעים (25 חודשים אחורה) — לכל מבצע × חודש × סניף: כמות + סך הנחה ──
+    promo_rows = []
+    try:
+        cur.execute("""
+            SELECT p.ID AS PromoID, CAST(p.Description AS NVARCHAR(200)) AS PromoName, st.StoreName,
+                   CONVERT(VARCHAR(7), t.SaleTime, 120) AS YearMonth,
+                   SUM(ted.QtyInSale)  AS Qty,
+                   SUM(ted.DiscAmount) AS Total
+            FROM TEntryDiscount ted
+            JOIN TransactionDiscounts td ON td.TDiscountID = ted.TDiscountID
+            JOIN TransactionEntry te     ON te.TransactionEntryID = ted.TransactionEntryID
+            JOIN [Transaction] t         ON t.TransactionID = te.TransactionID
+            JOIN Store st                ON st.StoreID = t.StoreID AND st.Status = 1
+            JOIN Promotion p             ON p.ID = td.PromotionID
+            WHERE te.Status > -1 AND t.Status > -1
+              AND ISNULL(ted.Status,0) > -1 AND ISNULL(td.Status,0) > -1
+              AND t.SaleTime >= DATEADD(MONTH, -25, GETDATE())
+            GROUP BY p.ID, p.Description, st.StoreName, CONVERT(VARCHAR(7), t.SaleTime, 120)
+        """)
+        rcols = [d[0] for d in cur.description]
+        for row in cur.fetchall():
+            d = dict(zip(rcols, row))
+            promo_rows.append({
+                'id':    d['PromoID'],
+                'name':  (d['PromoName'] or '').strip(),
+                'ym':    d['YearMonth'],
+                'store': d['StoreName'],
+                'qty':   float(d['Qty'] or 0),
+                'total': float(d['Total'] or 0),
+            })
+    except Exception as e:
+        print("PROMO_QUERY_ERROR:", repr(e))
+        promo_rows = []
+
     return {
         'stores': stores_raw, 'depts': depts_raw, 'sellers': sellers_raw,
         'daily': daily, 'payments': payments_raw, 'hours': hours_raw,
         'rivhit': rivhit_raw, 'rivhit_invoices': rivhit_invoices_raw,
         'sup_monthly': sup_monthly_raw, 'sup_docs': sup_docs_raw,
-        'presence': presence_raw,
+        'presence': presence_raw, 'promo_rows': promo_rows,
     }
 
 
@@ -390,6 +424,10 @@ def main():
                 r['StoreName'] = lbl
             for r in part['hours']:
                 r['StoreName'] = lbl
+            for r in part['presence']:
+                r['StoreName'] = lbl
+            for r in part['promo_rows']:
+                r['store'] = lbl
         parts.append(part)
         print(f"  ✓ {cfg['name']}: {len(part['daily'])} ימים")
 
@@ -410,6 +448,17 @@ def main():
     rivhit_invoices = cat('rivhit_invoices')
     sup_monthly     = cat('sup_monthly')
     sup_docs        = cat('sup_docs')
+
+    # מבצעים: מיזוג בין הסניפים לפי שם המבצע → monthly[YearMonth][StoreName] = {qty,total}
+    promo_by = {}
+    for r in cat('promo_rows'):
+        key = r['name'] or ('מבצע ' + str(r['id']))
+        pm = promo_by.setdefault(key, {'id': r['id'], 'name': r['name'], 'monthly': {}})
+        mo = pm['monthly'].setdefault(r['ym'], {})
+        s  = mo.setdefault(r['store'], {'qty': 0.0, 'total': 0.0})
+        s['qty'] += r['qty']; s['total'] += r['total']
+    def _ptot(pm): return sum(sv['total'] for m in pm['monthly'].values() for sv in m.values())
+    promos = sorted(promo_by.values(), key=lambda p: -_ptot(p))
 
     # ── ארגון לפי תאריך ──
     by_date = defaultdict(lambda: {'stores': [], 'depts': [], 'sellers': [], 'payments': []})
@@ -466,6 +515,7 @@ def main():
         'hours_by_store':   hours,
         'simply_net':       simply_net,
         'simply_net_days':  simply_net_days,
+        'promos':           promos,
     }
     os.makedirs('docs', exist_ok=True)
     print("שומר today.json...")
