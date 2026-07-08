@@ -371,6 +371,37 @@ def main():
     for r in payments:
         dt = r.pop('SaleDate'); by_date[dt]['payments'].append(r)
 
+    # ── נטו סימפלי מהפורטל: הערך האמיתי של מימושי הגיפטקארד היום, אחרי אחוז ההנחה של הקהילה ──
+    # (נכשל בשקט — אם הפורטל/סשן סימפלי לא זמין, פשוט לא נציג נטו; הברוטו מ-ARNET תמיד קיים)
+    print("שולף נטו סימפלי מהפורטל (פר-יום, 60 יום)...")
+    simply_net = None            # היום — לשורת אמצעי התשלום
+    simply_net_days = None       # מפה לפי תאריך ISO — לכל יום שהדשבורד מציג
+    try:
+        import os as _os, urllib.request as _ureq, urllib.parse as _up
+        _sec = _os.environ.get('EXECUTOR_SECRET')
+        if _sec:
+            _url = 'https://orgs.chasidim-center.co.il/api/net-simply?' + _up.urlencode({'key': _sec, 'days': '60', 'max': '5'})
+            with _ureq.urlopen(_url, timeout=60) as _resp:
+                _r = json.loads(_resp.read().decode('utf-8'))
+            _days = _r.get('days', {}) or {}
+            simply_net_days = {}
+            for _k, _v in _days.items():
+                try:
+                    _dd, _mm, _yy = _k.split('/'); _iso = f"{_yy}-{_mm.zfill(2)}-{_dd.zfill(2)}"
+                except Exception:
+                    _iso = _k
+                simply_net_days[_iso] = _v
+            _today_iso = datetime.now().strftime('%Y-%m-%d')
+            simply_net = simply_net_days.get(_today_iso)
+            if isinstance(simply_net, dict):
+                simply_net = dict(simply_net); simply_net['sessionOk'] = _r.get('sessionOk', True)
+            print(f"  נטו סימפלי: {len(simply_net_days)} ימים | fetched={_r.get('fetched')} pending={_r.get('pending')} sessionOk={_r.get('sessionOk')}")
+        else:
+            print("  דילוג — EXECUTOR_SECRET לא מוגדר")
+    except Exception as e:
+        print("SIMPLY_NET_ERROR:", repr(e))
+        simply_net = None; simply_net_days = None
+
     today_str = datetime.now().strftime('%Y-%m-%d')
     out = {
         'today':            today_str,
@@ -382,6 +413,8 @@ def main():
         'sup_monthly':      sup_monthly,
         'sup_docs':         sup_docs,
         'hours_by_store':   hours,
+        'simply_net':       simply_net,
+        'simply_net_days':  simply_net_days,
     }
     os.makedirs('docs', exist_ok=True)
     print("שומר today.json...")

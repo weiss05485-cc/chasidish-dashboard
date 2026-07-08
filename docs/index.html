@@ -1664,6 +1664,17 @@ function _renderTodayContent() {
   // נתוני התאריך הנבחר
   const dayData = data.by_date[selDate] || {stores:[], depts:[], sellers:[]};
 
+  // סימפלי (מהפורטל) — שורת-מידע נפרדת בלבד. לא מעורב במכירות/תשלומים (ARNET לא מציג אותו כלל).
+  let simplyInfo = null, simplyStale = false;   // {gross, net, pct}
+  const _snDay = (data.simply_net_days && data.simply_net_days[selDate])
+              || (isToday ? data.simply_net : null);
+  if (_snDay) {
+    simplyStale = _snDay.sessionOk === false || !!_snDay.stale;
+    const cs = (_snDay.byStore || {})['חסידיש'], t = _snDay.total;
+    const info = (cs && cs.gross > 0) ? cs : ((t && t.gross > 0) ? t : null);
+    if (info) simplyInfo = { gross: info.gross, net: info.net, pct: info.gross > 0 ? (100 - info.net / info.gross * 100) : 0 };
+  }
+
   // כרטיסי סניף
   let totSales = 0, totTrans = 0;
   const storeHtml = dayData.stores.map(s => {
@@ -1707,7 +1718,7 @@ function _renderTodayContent() {
   // אמצעי תשלום
   const pays = dayData.payments || [];
   const payTotal = pays.reduce((s,r) => s + r.TotalAmount, 0);
-  document.getElementById('today-payment-list').innerHTML = pays.length
+  const payHtml = pays.length
     ? pays.map(r => {
         const pct = payTotal > 0 ? (r.TotalAmount / payTotal * 100).toFixed(1) : 0;
         const icon = r.PayMethod.includes('אשראי') || r.PayMethod.includes('כארד') || r.PayMethod.includes('קרדיט') ? '💳'
@@ -1728,6 +1739,17 @@ function _renderTodayContent() {
         </div>`;
       }).join('')
     : '<div style="color:var(--muted);padding:12px">אין נתונים</div>';
+  // שורת-מידע נפרדת: מומש בגיפטקארד סימפלי (נטו) — לא נספר באמצעי התשלום, תוספת מהפורטל
+  const simplyLine = (simplyInfo && simplyInfo.gross > 0)
+    ? `<div style="margin-top:10px;padding:10px 12px;background:linear-gradient(135deg,#eef2ff,#faf5ff);border:1px solid #e0e7ff;border-radius:10px">
+         <div style="display:flex;justify-content:space-between;align-items:center">
+           <span style="font-weight:700;color:#6366f1">🎁 מומש בגיפטקארד סימפלי (נטו)</span>
+           <span style="font-weight:800;color:#6366f1;font-size:14px">${fmt(simplyInfo.net)}</span>
+         </div>
+         <div style="font-size:11px;color:var(--muted);margin-top:2px">ברוטו ${fmt(simplyInfo.gross)} · הנחה ${simplyInfo.pct.toFixed(1)}%${simplyStale ? ' · <span style="color:#b45309">מהמטמון</span>' : ''} · לא נכלל בסך אמצעי התשלום</div>
+       </div>`
+    : '';
+  document.getElementById('today-payment-list').innerHTML = payHtml + simplyLine;
 
   // גרף
   _renderTodayChart();
