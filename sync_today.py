@@ -448,6 +448,8 @@ def main():
     rivhit_invoices = cat('rivhit_invoices')
     sup_monthly     = cat('sup_monthly')
     sup_docs        = cat('sup_docs')
+    # שעות עבודה (נוכחות): איחוד פשוט בין הסניפים
+    presence        = cat('presence')
 
     # מבצעים: מיזוג בין הסניפים לפי שם המבצע → monthly[YearMonth][StoreName] = {qty,total}
     promo_by = {}
@@ -516,6 +518,7 @@ def main():
         'simply_net':       simply_net,
         'simply_net_days':  simply_net_days,
         'promos':           promos,
+        'presence':         presence,
     }
     os.makedirs('docs', exist_ok=True)
     print("שומר today.json...")
