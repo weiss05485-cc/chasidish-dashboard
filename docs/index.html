@@ -439,6 +439,7 @@ body.emp-mode .price-col{display:none!important}
   <button class="nav-btn" onclick="showPage('today')">🏪 קופות יומי</button>
   <button class="nav-btn" onclick="showPage('orders')">📋 הזמנות</button>
   <button class="nav-btn" onclick="showPage('planner')">📦 תכנון הזמנה</button>
+  <button class="nav-btn" onclick="showPage('hours')">🕐 שעות עבודה</button>
 </nav>
 
 <div id="bottom-nav">
@@ -451,10 +452,18 @@ body.emp-mode .price-col{display:none!important}
   <button class="bnav-btn" onclick="showPage('today')"><span class="bnav-icon">🏪</span>קופות</button>
   <button class="bnav-btn" onclick="showPage('orders')"><span class="bnav-icon">📋</span>הזמנות</button>
   <button class="bnav-btn" onclick="showPage('planner')"><span class="bnav-icon">📦</span>תכנון</button>
+  <button class="bnav-btn" onclick="showPage('hours')"><span class="bnav-icon">🕐</span>שעות</button>
 </div>
 
 <div id="loading">
   <div class="spin"></div><br>טוען נתונים...
+</div>
+
+<!-- PAGE: HOURS (שעות עבודה) -->
+<div id="page-hours" class="page">
+<div class="container">
+  <div id="hours-root"><div style="color:var(--muted);padding:24px;text-align:center">טוען…</div></div>
+</div>
 </div>
 
 <!-- PAGE: OVERVIEW -->
@@ -2499,7 +2508,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  const labels = {overview:0, search:1, departments:2, lowstock:3, reports:4, sales:5, today:6, orders:7, planner:8};
+  const labels = {overview:0, search:1, departments:2, lowstock:3, reports:4, sales:5, today:6, orders:7, planner:8, hours:9};
   const navBtns  = document.querySelectorAll('.nav-btn');
   const bnavBtns = document.querySelectorAll('.bnav-btn');
   if (navBtns[labels[id]])  navBtns[labels[id]].classList.add('active');
@@ -2514,6 +2523,108 @@ function showPage(id) {
   if (id === 'today')    renderToday();
   if (id === 'orders')   { renderOrdersPage(); syncOrdersFromGitHub(); }
   if (id === 'planner')  initOrderPlanner();
+  if (id === 'hours')    renderHours();
+}
+
+/* ========== שעות עבודה (נוכחות עובדים) ========== */
+let _hoursPeriod = 'week';
+let _hoursStore  = 'all';
+
+function _hoursHM(h) { const H = Math.floor(h + 1e-9); const M = Math.round((h - H) * 60); return H + ':' + String(M).padStart(2, '0'); }
+function _isoMinus(iso, days) { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() - days);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function setHoursPeriod(p) { _hoursPeriod = p; _renderHours(); }
+function setHoursStore(s)  { _hoursStore  = s; _renderHours(); }
+function toggleEmpHours(k) { const el = document.getElementById('emp-detail-' + k); if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none'; }
+
+function renderHours() {
+  const root = document.getElementById('hours-root');
+  if (!root) return;
+  if (TODAY_DATA && TODAY_DATA.presence) { _renderHours(); return; }
+  root.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center">טוען…</div>';
+  fetch('today.json?t=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error('404'); return r.json(); })
+    .then(d => { if (!TODAY_DATA) TODAY_DATA = d; else TODAY_DATA.presence = d.presence; _renderHours(); })
+    .catch(() => { root.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center">אין נתוני נוכחות עדיין (יופיע אחרי הסנכרון הבא).</div>'; });
+}
+
+function _renderHours() {
+  const root = document.getElementById('hours-root');
+  const data = TODAY_DATA || {};
+  const pres = data.presence || [];
+  const todayIso = data.today || (pres[0] && pres[0].iso) || '';
+  if (!pres.length) {
+    root.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center">אין נתוני שעון נוכחות ב-45 הימים האחרונים.</div>';
+    return;
+  }
+
+  // מי במשמרת עכשיו: רשומת היום עם פאנץ' אחרון פתוח (בלי יציאה)
+  const onShift = pres.filter(p => p.iso === todayIso && p.punches.length && p.punches[p.punches.length - 1].out == null);
+
+  const stores = Array.from(new Set(pres.map(p => p.StoreName))).sort();
+
+  // טווח התקופה
+  const periodDays = { today: 0, week: 6, month: 29, '45': 45 };
+  const fromIso = _hoursPeriod === '45' ? '0000-00-00' : _isoMinus(todayIso, periodDays[_hoursPeriod]);
+  let rows = pres.filter(p => p.iso >= fromIso);
+  if (_hoursStore !== 'all') rows = rows.filter(p => p.StoreName === _hoursStore);
+
+  // סיכום לפי עובד
+  const emp = {};
+  rows.forEach(p => {
+    const k = 'e' + String(p.uid || (p.no + p.name)).replace(/[^0-9A-Za-z]/g, '');
+    if (!emp[k]) emp[k] = { name: p.name, no: p.no, stores: new Set(), days: {}, hours: 0, recs: [] };
+    const e = emp[k];
+    e.stores.add(p.StoreName); e.days[p.iso] = 1; e.hours += p.hours; e.recs.push(p);
+  });
+  const list = Object.entries(emp).map(([k, e]) => ({ k, name: e.name, stores: e.stores, hours: e.hours, recs: e.recs, ndays: Object.keys(e.days).length })).sort((a, b) => b.hours - a.hours);
+  const totalHours = list.reduce((s, e) => s + e.hours, 0);
+
+  const shiftCard = onShift.length
+    ? `<div class="section" style="background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border:1px solid #bbf7d0">
+         <div style="font-weight:800;color:#059669;margin-bottom:8px">🟢 במשמרת עכשיו (${onShift.length})</div>
+         ${onShift.map(p => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #d1fae5">
+             <span style="font-weight:600">${p.name || '—'} <span style="color:var(--muted);font-size:11px">${p.StoreName}</span></span>
+             <span style="color:#059669;font-size:12px">מ-${(p.punches[0] || {}).in || '—'}</span></div>`).join('')}
+       </div>`
+    : `<div class="section" style="color:var(--muted)">אין עובדים במשמרת כרגע</div>`;
+
+  const pbtn = (id, lbl) => `<button class="btn" onclick="setHoursPeriod('${id}')" style="padding:5px 12px;font-size:12px${_hoursPeriod === id ? ';background:var(--navy);color:#fff' : ''}">${lbl}</button>`;
+  const sbtn = (id, lbl) => `<button class="btn" onclick="setHoursStore('${id.replace(/'/g, "\\'")}')" style="padding:4px 10px;font-size:11px${_hoursStore === id ? ';background:var(--navy);color:#fff' : ''}">${lbl}</button>`;
+  const controls = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${pbtn('today', 'היום')}${pbtn('week', 'השבוע')}${pbtn('month', 'החודש')}${pbtn('45', '45 יום')}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${sbtn('all', 'כל הסניפים')}${stores.map(s => sbtn(s, s)).join('')}</div>`;
+
+  const summary = list.length
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px">
+         <thead><tr style="text-align:right;color:var(--muted);font-size:11px">
+           <th style="padding:6px">עובד</th><th style="padding:6px">סניף</th>
+           <th style="padding:6px;text-align:center">ימים</th><th style="padding:6px;text-align:left">סה"כ שעות</th></tr></thead>
+         <tbody>
+         ${list.map(e => `
+           <tr onclick="toggleEmpHours('${e.k}')" style="cursor:pointer;border-bottom:1px solid var(--border)">
+             <td style="padding:8px 6px;font-weight:600">▸ ${e.name || '—'}</td>
+             <td style="padding:8px 6px;color:var(--muted);font-size:11px">${Array.from(e.stores).join(', ')}</td>
+             <td style="padding:8px 6px;text-align:center">${e.ndays}</td>
+             <td style="padding:8px 6px;text-align:left;font-weight:800;color:var(--navy)">${_hoursHM(e.hours)}</td></tr>
+           <tr id="emp-detail-${e.k}" style="display:none"><td colspan="4" style="padding:0 6px 10px">
+             ${e.recs.slice().sort((a, b) => a.iso < b.iso ? 1 : -1).map(p => `
+               <div style="display:flex;justify-content:space-between;gap:8px;padding:4px 8px;font-size:12px;background:#f8fafc;border-radius:6px;margin-bottom:3px">
+                 <span>${p.date} <span style="color:var(--muted)">${p.StoreName}</span></span>
+                 <span style="color:var(--muted)">${p.punches.map(x => (x.in || '—') + '–' + (x.out || '…')).join(' · ')}</span>
+                 <span style="font-weight:700">${_hoursHM(p.hours)}</span></div>`).join('')}
+           </td></tr>`).join('')}
+         </tbody></table>`
+    : '<div style="color:var(--muted);padding:12px">אין נתונים לתקופה זו</div>';
+
+  root.innerHTML = shiftCard + `
+    <div class="section">
+      <div style="font-weight:800;margin-bottom:10px">🕐 דוח שעות עבודה</div>
+      ${controls}
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px">
+        <span>${list.length} עובדים · לחיצה על עובד פותחת פירוט יומי</span><span>סה"כ ${_hoursHM(totalHours)} שעות</span></div>
+      ${summary}
+    </div>`;
 }
 
 /* ========== OVERVIEW ========== */

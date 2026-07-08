@@ -301,11 +301,62 @@ def collect(conn):
         d['TotalSales']   = round(float(d['TotalSales']), 2)
         hours_raw.append(d)
 
+    # ── 9. שעות עבודה (שעון נוכחות PresenceView) — כל זוגות כניסה/יציאה, 45 יום אחורה ──
+    # Name/UserNo כ-CAST ל-NVARCHAR כדי למנוע ג'יבריש עברית ב-pymssql (סנכרון ענן)
+    presence_raw = []
+    try:
+        cur.execute("""
+            SELECT pv.UserID,
+                   CAST(pv.Name AS NVARCHAR(200))   AS Name,
+                   CAST(pv.UserNo AS NVARCHAR(50))  AS UserNo,
+                   st.StoreName,
+                   CAST(pv.PreDate AS DATE)         AS PreDate,
+                   pv.Login1, pv.Logout1, pv.Login2, pv.Logout2, pv.Login3, pv.Logout3,
+                   pv.Login4, pv.Logout4, pv.Login5, pv.Logout5, pv.Login6, pv.Logout6
+            FROM PresenceView pv
+            JOIN Store st ON st.StoreID = pv.StoreID AND st.Status = 1
+            WHERE pv.PreDate >= DATEADD(DAY, -45, CAST(GETDATE() AS DATE))
+            ORDER BY pv.PreDate DESC
+        """)
+        pcols = [d[0] for d in cur.description]
+        def _hm(v):   return v.strftime('%H:%M') if v is not None and hasattr(v, 'strftime') else None
+        def _mins(v): return v.hour * 60 + v.minute if v is not None and hasattr(v, 'hour') else None
+        for row in cur.fetchall():
+            d = dict(zip(pcols, row))
+            punches, total_min = [], 0
+            for i in range(1, 7):
+                li = d.get('Login%d' % i); lo = d.get('Logout%d' % i)
+                if li is None and lo is None:
+                    continue
+                punches.append({'in': _hm(li), 'out': _hm(lo)})
+                mi, mo = _mins(li), _mins(lo)
+                if mi is not None and mo is not None:
+                    diff = mo - mi
+                    if diff < 0: diff += 1440   # משמרת שחוצה חצות
+                    total_min += diff
+            if not punches:
+                continue
+            pd = d['PreDate']
+            presence_raw.append({
+                'iso':       pd.strftime('%Y-%m-%d') if hasattr(pd, 'strftime') else str(pd),
+                'date':      pd.strftime('%d/%m')    if hasattr(pd, 'strftime') else str(pd),
+                'StoreName': d['StoreName'],
+                'name':      (d['Name'] or '').strip(),
+                'no':        d['UserNo'],
+                'uid':       str(d['UserID']),
+                'punches':   punches,
+                'hours':     round(total_min / 60.0, 2),
+            })
+    except Exception as e:
+        print("PRESENCE_QUERY_ERROR:", repr(e))
+        presence_raw = []
+
     return {
         'stores': stores_raw, 'depts': depts_raw, 'sellers': sellers_raw,
         'daily': daily, 'payments': payments_raw, 'hours': hours_raw,
         'rivhit': rivhit_raw, 'rivhit_invoices': rivhit_invoices_raw,
         'sup_monthly': sup_monthly_raw, 'sup_docs': sup_docs_raw,
+        'presence': presence_raw,
     }
 
 
