@@ -45,6 +45,7 @@ jobs:
           DB2_USER:     ${{ secrets.DB2_USER }}
           DB2_PASSWORD: ${{ secrets.DB2_PASSWORD }}
           DB2_LABEL:    ${{ secrets.DB2_LABEL }}
+          EXECUTOR_SECRET: ${{ secrets.EXECUTOR_SECRET }}
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"
