@@ -301,7 +301,7 @@ def collect(conn):
         d['TotalSales']   = round(float(d['TotalSales']), 2)
         hours_raw.append(d)
 
-    # ── 9. שעות עבודה (שעון נוכחות PresenceView) — כל זוגות כניסה/יציאה, 45 יום אחורה ──
+    # ── 9. שעות עבודה (שעון נוכחות PresenceView) — כל זוגות כניסה/יציאה, 400 יום אחורה (13 חודשים) ──
     # Name/UserNo כ-CAST ל-NVARCHAR כדי למנוע ג'יבריש עברית ב-pymssql (סנכרון ענן)
     presence_raw = []
     try:
@@ -315,7 +315,7 @@ def collect(conn):
                    pv.Login4, pv.Logout4, pv.Login5, pv.Logout5, pv.Login6, pv.Logout6
             FROM PresenceView pv
             JOIN Store st ON st.StoreID = pv.StoreID AND st.Status = 1
-            WHERE pv.PreDate >= DATEADD(DAY, -45, CAST(GETDATE() AS DATE))
+            WHERE pv.PreDate >= DATEADD(DAY, -400, CAST(GETDATE() AS DATE))
             ORDER BY pv.PreDate DESC
         """)
         pcols = [d[0] for d in cur.description]
