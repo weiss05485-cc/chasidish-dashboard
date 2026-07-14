@@ -1697,8 +1697,9 @@ function _renderTodayContent() {
               || (isToday ? data.simply_net : null);
   if (_snDay) {
     simplyStale = _snDay.sessionOk === false || !!_snDay.stale;
-    const cs = (_snDay.byStore || {})['חסידיש'], t = _snDay.total;
-    const info = (cs && cs.gross > 0) ? cs : ((t && t.gross > 0) ? t : null);
+    // חסידיש בלבד — בלי fallback ל-total (שכולל חסידים סנטר + גלית מן וגורם להצגת סימפלי של עסקים אחרים)
+    const cs = (_snDay.byStore || {})['חסידיש'];
+    const info = (cs && cs.gross > 0) ? cs : null;
     if (info) simplyInfo = { gross: info.gross, net: info.net, pct: info.gross > 0 ? (100 - info.net / info.gross * 100) : 0 };
   }
 
