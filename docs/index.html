@@ -1664,6 +1664,9 @@ function todayPickDate(val) {
   _renderTodayContent();
 }
 
+let _payStore = 'all';   // סינון אמצעי תשלום לפי סניף (all = כל הסניפים מסוכמים)
+function setPayStore(s) { _payStore = s; _renderTodayContent(); }
+
 function _renderTodayContent() {
   if (!TODAY_DATA) return;
   const data = TODAY_DATA;
@@ -1743,9 +1746,20 @@ function _renderTodayContent() {
         </div>`).join('')
     : '<div style="color:var(--muted);padding:12px">אין נתונים</div>';
 
-  // אמצעי תשלום
-  const pays = dayData.payments || [];
+  // אמצעי תשלום — עם אפשרות פיצול לפי סניף
+  const paysRaw = dayData.payments || [];
+  const payStores = [...new Set(paysRaw.map(p => p.StoreName).filter(Boolean))].sort();
+  const paysF = (_payStore === 'all') ? paysRaw : paysRaw.filter(p => p.StoreName === _payStore);
+  // אגרגציה לפי אמצעי תשלום (מסכם בין הסניפים במצב "הכל")
+  const _payAgg = {};
+  paysF.forEach(p => { const k = p.PayMethod; if (!_payAgg[k]) _payAgg[k] = { PayMethod: k, TotalAmount: 0, Cnt: 0 }; _payAgg[k].TotalAmount += p.TotalAmount; _payAgg[k].Cnt += (p.Cnt || 0); });
+  const pays = Object.values(_payAgg).sort((a, b) => b.TotalAmount - a.TotalAmount);
   const payTotal = pays.reduce((s,r) => s + r.TotalAmount, 0);
+  // כפתורי סינון סניף (רק אם יש יותר מסניף אחד)
+  const _pbtn = (id, lbl) => `<button class="btn" onclick="setPayStore('${id.replace(/'/g, "\\'")}')" style="padding:3px 9px;font-size:11px${_payStore === id ? ';background:var(--navy);color:#fff' : ''}">${lbl}</button>`;
+  const payFilter = payStores.length > 1
+    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">${_pbtn('all', 'הכל')}${payStores.map(s => _pbtn(s, s)).join('')}</div>`
+    : '';
   const payHtml = pays.length
     ? pays.map(r => {
         const pct = payTotal > 0 ? (r.TotalAmount / payTotal * 100).toFixed(1) : 0;
@@ -1777,7 +1791,7 @@ function _renderTodayContent() {
          <div style="font-size:11px;color:var(--muted);margin-top:2px">ברוטו ${fmt(simplyInfo.gross)} · הנחה ${simplyInfo.pct.toFixed(1)}%${simplyStale ? ' · <span style="color:#b45309">מהמטמון</span>' : ''} · לא נכלל בסך אמצעי התשלום</div>
        </div>`
     : '';
-  document.getElementById('today-payment-list').innerHTML = payHtml + simplyLine;
+  document.getElementById('today-payment-list').innerHTML = payFilter + payHtml + (_payStore === 'all' ? simplyLine : '');
 
   // גרף
   _renderTodayChart();

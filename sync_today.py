@@ -132,10 +132,11 @@ def collect(conn):
 
     # ── 5. אמצעי תשלום × יום ──
     cur.execute("""
-        SELECT SaleDate, PayMethod, SUM(TotalAmount) AS TotalAmount, SUM(Cnt) AS Cnt
+        SELECT SaleDate, StoreName, PayMethod, SUM(TotalAmount) AS TotalAmount, SUM(Cnt) AS Cnt
         FROM (
             SELECT
                 CONVERT(VARCHAR(10), t.SaleTime, 23)                        AS SaleDate,
+                st.StoreName                                                 AS StoreName,
                 ISNULL(tn.TenderNameHe, CAST(te.TenderID AS NVARCHAR(10)))  AS PayMethod,
                 te.Amount                                                    AS TotalAmount,
                 1                                                            AS Cnt
@@ -150,6 +151,7 @@ def collect(conn):
 
             SELECT
                 CONVERT(VARCHAR(10), t.SaleTime, 23)  AS SaleDate,
+                st.StoreName                          AS StoreName,
                 N'גיפטקארד סימפלי'                    AS PayMethod,
                 ABS(tei.Total)                        AS TotalAmount,
                 1                                     AS Cnt
@@ -161,7 +163,7 @@ def collect(conn):
               AND tei.TransactionEntryType = 18
               AND tei.Total < 0
         ) base
-        GROUP BY SaleDate, PayMethod
+        GROUP BY SaleDate, StoreName, PayMethod
         ORDER BY SaleDate, TotalAmount DESC
     """)
     cols = [d[0] for d in cur.description]
@@ -424,6 +426,8 @@ def main():
                 r['StoreName'] = lbl
             for r in part['hours']:
                 r['StoreName'] = lbl
+            for r in part['payments']:
+                r['StoreName'] = lbl
             for r in part['presence']:
                 r['StoreName'] = lbl
             for r in part['promo_rows']:
@@ -439,7 +443,7 @@ def main():
     # מחלקות / מוכרים / תשלומים / יומי: מסכמים בין הסניפים לכל תאריך
     depts    = _merge_sum(cat('depts'),    ['SaleDate', 'Dept'],       ['TotalSales'])
     sellers  = _merge_sum(cat('sellers'),  ['SaleDate', 'SellerName'], ['TotalSales', 'Transactions'])
-    payments = _merge_sum(cat('payments'), ['SaleDate', 'PayMethod'],  ['TotalAmount', 'Cnt'])
+    payments = _merge_sum(cat('payments'), ['SaleDate', 'StoreName', 'PayMethod'],  ['TotalAmount', 'Cnt'])
     daily    = _merge_sum(cat('daily'),    ['SaleDate'],               ['TotalSales', 'Transactions'])
     daily.sort(key=lambda d: d['SaleDate'])
     # שעות: שם סניף ייחודי לכל ענף — איחוד פשוט
