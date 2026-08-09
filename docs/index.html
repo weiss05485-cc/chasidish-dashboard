@@ -450,6 +450,7 @@ body.emp-mode .price-col{display:none!important}
   <button class="nav-btn" onclick="showPage('sales')">📈 מכירות</button>
   <button class="nav-btn" onclick="showPage('promos')">🎯 מבצעים</button>
   <button class="nav-btn" onclick="showPage('hours')">🕐 שעות עבודה</button>
+  <button class="nav-btn" onclick="showPage('bestsellers')">🏆 נמכרים ביותר</button>
 </nav>
 
 <div id="bottom-nav">
@@ -457,10 +458,52 @@ body.emp-mode .price-col{display:none!important}
   <button class="bnav-btn" onclick="showPage('sales')"><span class="bnav-icon">📈</span>מכירות</button>
   <button class="bnav-btn" onclick="showPage('promos')"><span class="bnav-icon">🎯</span>מבצעים</button>
   <button class="bnav-btn" onclick="showPage('hours')"><span class="bnav-icon">🕐</span>שעות</button>
+  <button class="bnav-btn" onclick="showPage('bestsellers')"><span class="bnav-icon">🏆</span>נמכרים</button>
 </div>
 
 <div id="loading">
   <div class="spin"></div><br>טוען נתונים...
+</div>
+
+<!-- PAGE: BESTSELLERS (הנמכרים ביותר) -->
+<div id="page-bestsellers" class="page">
+<div class="container">
+  <div id="bs-content">
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;margin-bottom:14px">
+      <div>
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px">תקופה:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="pill active" onclick="setBsPeriod('cur',this)">החודש</button>
+          <button class="pill" onclick="setBsPeriod('prev',this)">חודש שעבר</button>
+          <button class="pill" onclick="setBsPeriod('3',this)">3 חודשים</button>
+          <button class="pill" onclick="setBsPeriod('6',this)">6 חודשים</button>
+          <button class="pill" onclick="setBsPeriod('12',this)">שנה</button>
+          <button class="pill" onclick="setBsPeriod('custom',this)">מותאם</button>
+        </div>
+        <div id="bs-custom" style="display:none;margin-top:8px;gap:8px;align-items:center">
+          <input type="month" id="bs-from" onchange="renderBestsellers()" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px">
+          <span style="color:var(--muted)">עד</span>
+          <input type="month" id="bs-to" onchange="renderBestsellers()" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px">
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px">מחלקה:</div>
+        <select id="bs-dept" onchange="renderBestsellers()" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px"><option value="">כל המחלקות</option></select>
+      </div>
+      <div style="flex:1;min-width:160px">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px">חיפוש פריט:</div>
+        <input type="text" id="bs-search" oninput="renderBestsellers()" placeholder="שם מוצר..." style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px">
+      </div>
+    </div>
+    <div id="bs-summary" style="font-size:13px;color:var(--muted);font-weight:600;margin-bottom:8px"></div>
+    <div class="table-wrap" style="max-height:calc(100vh - 300px);overflow:auto">
+      <table class="data-table" id="bs-table">
+        <thead><tr><th style="width:40px">#</th><th>פריט</th><th>מחלקה</th><th style="width:200px">כמות שנמכרה</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- PAGE: HOURS (שעות עבודה) -->
@@ -2420,7 +2463,7 @@ function renderComparison() {
 
 /* ========== AUTH ========== */
 const EMP_PAGES = new Set(['today']);
-const ALL_PAGES = ['today','sales','promos','hours'];
+const ALL_PAGES = ['today','sales','promos','hours','bestsellers'];
 
 // ── Users from Arnet (users.json) ──
 // ── הצפנת נתונים (AES-GCM + PBKDF2, תואם encrypt_data.py) — סיסמת מערכת ──
@@ -2611,7 +2654,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  const labels = {today:0, sales:1, promos:2, hours:3};
+  const labels = {today:0, sales:1, promos:2, hours:3, bestsellers:4};
   const navBtns  = document.querySelectorAll('.nav-btn');
   const bnavBtns = document.querySelectorAll('.bnav-btn');
   if (navBtns[labels[id]])  navBtns[labels[id]].classList.add('active');
@@ -2628,6 +2671,7 @@ function showPage(id) {
   if (id === 'planner')  initOrderPlanner();
   if (id === 'hours')    renderHours();
   if (id === 'promos')   renderPromos();
+  if (id === 'bestsellers') renderBestsellers();
 }
 
 /* ========== שעות עבודה (נוכחות עובדים) ========== */
@@ -2923,6 +2967,60 @@ function renderPromosRows() {
       ${pctCell}${grossCell}${netCell}
     </tr>`;
   }).join('');
+}
+
+/* ========== נמכרים ביותר (bestsellers) ========== */
+const BS_EXCLUDE_DEPTS = new Set(['תיקונים','ללא מחלקה']);
+let _bsPeriod = 'cur';
+function setBsPeriod(p, btn){
+  _bsPeriod = p;
+  document.querySelectorAll('#page-bestsellers .pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('bs-custom').style.display = (p==='custom') ? 'flex' : 'none';
+  renderBestsellers();
+}
+function _bsAllowed(){
+  const now=new Date(); const cy=now.getFullYear(), cm=now.getMonth()+1;
+  const ym=(y,m)=> y+'-'+String(m).padStart(2,'0');
+  const back=(n)=>{ const a=[]; let y=cy,m=cm; for(let i=0;i<n;i++){ a.push(ym(y,m)); m--; if(m<1){m=12;y--;} } return new Set(a); };
+  if(_bsPeriod==='cur')  return new Set([ym(cy,cm)]);
+  if(_bsPeriod==='prev'){ let y=cy,m=cm-1; if(m<1){m=12;y--;} return new Set([ym(y,m)]); }
+  if(_bsPeriod==='custom'){ const f=(document.getElementById('bs-from')||{}).value||'0000-00', t=(document.getElementById('bs-to')||{}).value||'9999-99'; return {custom:true, from:f, to:t}; }
+  return back(parseInt(_bsPeriod,10)||1);
+}
+function renderBestsellers(){
+  loadSalesData(() => {
+    const sel=document.getElementById('bs-dept');
+    if(sel && sel.options.length<=1){
+      const depts=[...new Set(SALES_DATA.map(i=>i.dept))].filter(d=>!BS_EXCLUDE_DEPTS.has(d)).sort();
+      sel.innerHTML='<option value="">כל המחלקות</option>'+depts.map(d=>'<option value="'+d+'">'+d+'</option>').join('');
+    }
+    document.getElementById('bs-content').style.display='block';
+    const allowed=_bsAllowed();
+    const dept=(document.getElementById('bs-dept')||{}).value||'';
+    const term=(((document.getElementById('bs-search')||{}).value)||'').trim();
+    const inP = allowed.custom ? (y => y>=allowed.from && y<=allowed.to) : (y => allowed.has(y));
+    const agg={}; let totalQ=0;
+    (SALES_DATA||[]).forEach(r=>{
+      if(!inP(r.ym)) return;
+      if(BS_EXCLUDE_DEPTS.has(r.dept)) return;
+      if((r.n||'').indexOf('הנחה')>-1) return;
+      if(dept && r.dept!==dept) return;
+      if(term && (r.n||'').indexOf(term)===-1) return;
+      const k=r.n+'|'+r.dept;
+      const g=agg[k]||(agg[k]={n:r.n,dept:r.dept,q:0});
+      g.q+=(r.q||0); totalQ+=(r.q||0);
+    });
+    const rows=Object.values(agg).filter(x=>x.q>0).sort((a,b)=>b.q-a.q);
+    document.getElementById('bs-summary').textContent='סה"כ '+rows.length+' פריטים · '+Math.round(totalQ).toLocaleString()+' יחידות נמכרו';
+    const max=rows.length?rows[0].q:1;
+    document.querySelector('#bs-table tbody').innerHTML = rows.length ? rows.map((x,i)=>{
+      const pct=Math.max(2,Math.round(x.q/max*100));
+      return '<tr><td style="color:var(--muted)">'+(i+1)+'</td><td style="font-weight:600">'+x.n+'</td><td style="color:var(--muted);font-size:12px">'+x.dept+'</td>'+
+        '<td><div style="display:flex;align-items:center;gap:8px"><span style="min-width:44px;font-weight:700">'+Math.round(x.q).toLocaleString()+'</span>'+
+        '<span style="flex:1;height:8px;background:#eef2ff;border-radius:4px;overflow:hidden;max-width:150px"><span style="display:block;height:100%;width:'+pct+'%;background:var(--primary,var(--navy))"></span></span></div></td></tr>';
+    }).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">אין מכירות בתקופה שנבחרה</td></tr>';
+  });
 }
 
 /* ========== OVERVIEW ========== */
