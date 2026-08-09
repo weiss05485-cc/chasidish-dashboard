@@ -1422,37 +1422,29 @@ let selectedDrillDept = null;
 const MODEL_SHORTAGE_THRESHOLD = 5; // חליפות/פרחוני: store needs < this many of a model to be flagged
 
 /* ========== LOAD ========== */
-fetch('data.json?t=' + Date.now())
-  .then(r => r.json())
-  .then(data => {
+// הנתונים מוצפנים — הטעינה הראשית (data.json) קורית רק אחרי שהשער נפתח (סיסמה זמינה).
+// על טעינת הדף רק מציגים את השער; setTimeout מבטיח שכל ההגדרות (כולל _encPassword ו-intercept) כבר קיימות.
+function loadMainData() {
+  return loadEnc('data.json').then(data => {
     DATA = data;
-    storeList = DATA.store_summary.map(s => s.StoreName);
-    document.getElementById('last-updated').textContent = 'עודכן: ' + data.last_updated;
-    // Status strip: show stale warning if data > 3 hours old
-    (function() {
-      const lu = data.last_updated || '';
-      const strip = document.getElementById('status-strip');
-      const dots  = strip ? strip.querySelectorAll('.strip-dot') : [];
-      const upd   = document.querySelectorAll('.strip-upd');
-      upd.forEach(el => el.textContent = 'עדכון אחרון: ' + lu);
-      // Parse dd/mm/yyyy hh:mm
-      const pm = lu.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
-      if (pm && strip) {
-        const updated = new Date(+pm[3], +pm[2]-1, +pm[1], +pm[4], +pm[5]);
-        const ageHours = (Date.now() - updated.getTime()) / 3600000;
-        if (ageHours > 3) {
-          dots.forEach(d => { d.style.background = '#fb923c'; d.style.animationDuration = '1s'; });
-          if (strip) strip.style.setProperty('color', '#fde68a');
-          upd.forEach(el => el.textContent = '⚠️ נתונים לא עדכניים · עדכון אחרון: ' + lu);
-        }
+    try { storeList = DATA.store_summary.map(s => s.StoreName); } catch (e) {}
+    const lu = data.last_updated || '';
+    const luEl = document.getElementById('last-updated'); if (luEl) luEl.textContent = 'עודכן: ' + lu;
+    const strip = document.getElementById('status-strip');
+    const upd = document.querySelectorAll('.strip-upd');
+    upd.forEach(el => el.textContent = 'עדכון אחרון: ' + lu);
+    const pm = lu.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+    if (pm && strip) {
+      const updated = new Date(+pm[3], +pm[2]-1, +pm[1], +pm[4], +pm[5]);
+      if ((Date.now() - updated.getTime()) / 3600000 > 3) {
+        strip.querySelectorAll('.strip-dot').forEach(d => { d.style.background = '#fb923c'; d.style.animationDuration = '1s'; });
+        strip.style.setProperty('color', '#fde68a');
+        upd.forEach(el => el.textContent = '⚠️ נתונים לא עדכניים · עדכון אחרון: ' + lu);
       }
-    })();
-    document.getElementById('loading').style.display = 'none';
-    checkAuth();
-  })
-  .catch(e => {
-    document.getElementById('loading').innerHTML = '❌ שגיאה בטעינת הנתונים: ' + e.message;
-  });
+    }
+  }).catch(() => {});
+}
+setTimeout(checkAuth, 0);
 
 function loadSearchData(cb) {
   if (searchLoaded) { cb(); return; }
@@ -2529,6 +2521,8 @@ function checkAuth() {
   _afterGate();
 }
 function _afterGate() {
+  const ld = document.getElementById('loading'); if (ld) ld.style.display = 'none';
+  loadMainData();   // data.json (מוצפן) — עכשיו יש סיסמה
   const role = localStorage.getItem('cc_role');
   const gp = document.getElementById('gate-phase'), up = document.getElementById('user-phase');
   if (!role) {
