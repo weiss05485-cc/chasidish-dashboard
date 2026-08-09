@@ -399,16 +399,32 @@ body.emp-mode .price-col{display:none!important}
       <img src="logo-chasidish.png?v=1" alt="חסידיש" style="height:90px;width:auto;display:block;margin:0 auto">
     </div>
     <div id="login-logo">חסידיש</div>
-    <div id="login-sub">דשבורד מלאי — הכנס פרטי ארנט</div>
-    <input type="text" id="login-user" placeholder="שם משתמש" autocomplete="username"
-      onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"
-      style="width:100%;padding:13px 16px;border:2px solid var(--border);border-radius:12px;font-size:15px;text-align:center;margin-bottom:10px;outline:none;direction:ltr;font-family:'Rubik',sans-serif;transition:border-color .2s,box-shadow .2s"
-      onfocus="this.style.borderColor='var(--primary)';this.style.boxShadow='0 0 0 3px rgba(79,70,229,.15)'"
-      onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
-    <input type="password" id="login-pass" placeholder="סיסמה" autocomplete="current-password"
-      onkeydown="if(event.key==='Enter')doLogin()">
-    <button id="login-btn" onclick="doLogin()">כניסה</button>
-    <div id="login-error"></div>
+    <div id="login-sub">דשבורד מלאי</div>
+
+    <!-- שלב 1: סיסמת מערכת (מפענחת את הנתונים המוצפנים) -->
+    <div id="gate-phase">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">🔒 הזן סיסמת מערכת</div>
+      <input type="password" id="gate-pass" placeholder="סיסמת מערכת" autocomplete="off"
+        onkeydown="if(event.key==='Enter')submitGate()"
+        style="width:100%;padding:13px 16px;border:2px solid var(--border);border-radius:12px;font-size:16px;text-align:center;letter-spacing:4px;margin-bottom:14px;outline:none;direction:ltr;font-family:'Rubik',sans-serif">
+      <button id="gate-btn" onclick="submitGate()"
+        style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Rubik',sans-serif">המשך</button>
+      <div id="gate-error" style="color:#dc2626;font-size:13px;margin-top:8px"></div>
+    </div>
+
+    <!-- שלב 2: התחברות משתמש (כמו קודם) -->
+    <div id="user-phase" style="display:none">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">הכנס פרטי ארנט</div>
+      <input type="text" id="login-user" placeholder="שם משתמש" autocomplete="username"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()"
+        style="width:100%;padding:13px 16px;border:2px solid var(--border);border-radius:12px;font-size:15px;text-align:center;margin-bottom:10px;outline:none;direction:ltr;font-family:'Rubik',sans-serif;transition:border-color .2s,box-shadow .2s"
+        onfocus="this.style.borderColor='var(--primary)';this.style.boxShadow='0 0 0 3px rgba(79,70,229,.15)'"
+        onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+      <input type="password" id="login-pass" placeholder="סיסמה" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <button id="login-btn" onclick="doLogin()">כניסה</button>
+      <div id="login-error"></div>
+    </div>
   </div>
 </div>
 
@@ -2415,13 +2431,60 @@ const EMP_PAGES = new Set(['today']);
 const ALL_PAGES = ['today','sales','promos','hours'];
 
 // ── Users from Arnet (users.json) ──
+// ── הצפנת נתונים (AES-GCM + PBKDF2, תואם encrypt_data.py) — סיסמת מערכת ──
+const _origFetch = window.fetch.bind(window);
+let _encPassword = sessionStorage.getItem('cc_pass') || null;
+const _encKeyCache = {};
+const _ENC_FILES = /(^|\/)(data|today|search|reports|sales|users|historical_today|historical_sales|promos|staff_reports)\.json(\?|$)/;
+function _b64ToBytes(b64){ const bin=atob(b64); const a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i); return a; }
+async function _deriveKey(password, saltB64){
+  const ck=password+'|'+saltB64; if(_encKeyCache[ck])return _encKeyCache[ck];
+  const base=await crypto.subtle.importKey('raw', new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:_b64ToBytes(saltB64),iterations:200000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+  _encKeyCache[ck]=key; return key;
+}
+async function _decryptEnvelope(env, password){
+  const key=await _deriveKey(password, env.salt);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:_b64ToBytes(env.iv)},key,_b64ToBytes(env.ct));
+  return new TextDecoder().decode(pt);
+}
+async function loadEnc(name){
+  const r=await _origFetch(name+'.enc?t='+Date.now());
+  if(!r.ok) throw new Error('missing '+name);
+  const env=await r.json();
+  if(!_encPassword) throw new Error('no password');
+  return JSON.parse(await _decryptEnvelope(env, _encPassword));
+}
+// intercept שקוף: כל בקשת JSON של נתונים → נטענת מוצפנת ומפוענחת (בלי לשנות את שאר הקוד)
+window.fetch = function(url, opts){
+  if (typeof url==='string' && _ENC_FILES.test(url)) {
+    const name = url.split('?')[0].replace(/^.*\//,'');
+    return loadEnc(name).then(obj => new Response(JSON.stringify(obj), {status:200, headers:{'Content-Type':'application/json'}}));
+  }
+  return _origFetch(url, opts);
+};
+async function submitGate(){
+  const p=(document.getElementById('gate-pass').value||'').trim();
+  const err=document.getElementById('gate-error'), btn=document.getElementById('gate-btn');
+  if(!p){ err.textContent='הזן סיסמה'; return; }
+  btn.textContent='...'; btn.disabled=true; _encPassword=p;
+  try{
+    await loadEnc('users.json');   // אימות ע"י פענוח
+    sessionStorage.setItem('cc_pass', p);
+    err.textContent=''; btn.textContent='המשך'; btn.disabled=false;
+    _afterGate();
+  }catch(e){
+    _encPassword=null; sessionStorage.removeItem('cc_pass');
+    btn.textContent='המשך'; btn.disabled=false; err.textContent='סיסמה שגויה';
+    document.getElementById('gate-pass').value=''; document.getElementById('gate-pass').focus();
+  }
+}
+
 let _usersCache = null;
 async function loadUsers() {
   if (_usersCache) return _usersCache;
-  try {
-    const r = await fetch('users.json?v=' + Date.now());
-    _usersCache = await r.json();
-  } catch(e) { _usersCache = []; }
+  try { _usersCache = await loadEnc('users.json'); }
+  catch(e) { _usersCache = []; }
   return _usersCache;
 }
 
@@ -2456,11 +2519,24 @@ function _sha256js(msg){
 }
 
 function checkAuth() {
+  if (!_encPassword) {
+    document.getElementById('login-overlay').style.display = 'flex';
+    document.getElementById('gate-phase').style.display = '';
+    document.getElementById('user-phase').style.display = 'none';
+    setTimeout(() => { const g = document.getElementById('gate-pass'); if (g) g.focus(); }, 100);
+    return;
+  }
+  _afterGate();
+}
+function _afterGate() {
   const role = localStorage.getItem('cc_role');
+  const gp = document.getElementById('gate-phase'), up = document.getElementById('user-phase');
   if (!role) {
     document.getElementById('login-overlay').style.display = 'flex';
-    loadUsers(); // preload in background
-    setTimeout(() => document.getElementById('login-user').focus(), 100);
+    if (gp) gp.style.display = 'none';
+    if (up) up.style.display = '';
+    loadUsers(); // preload
+    setTimeout(() => { const u = document.getElementById('login-user'); if (u) u.focus(); }, 100);
   } else {
     document.getElementById('login-overlay').style.display = 'none';
     const userInfo = JSON.parse(localStorage.getItem('cc_user') || '{}');
