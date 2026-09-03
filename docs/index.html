@@ -490,6 +490,10 @@ body.emp-mode .price-col{display:none!important}
         <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px">מחלקה:</div>
         <select id="bs-dept" onchange="renderBestsellers()" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px"><option value="">כל המחלקות</option></select>
       </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px">סניף:</div>
+        <select id="bs-store" onchange="renderBestsellers()" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px"><option value="">כל הסניפים</option></select>
+      </div>
       <div style="flex:1;min-width:160px">
         <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px">חיפוש פריט:</div>
         <input type="text" id="bs-search" oninput="renderBestsellers()" placeholder="שם מוצר..." style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px">
@@ -2995,9 +2999,15 @@ function renderBestsellers(){
       const depts=[...new Set(SALES_DATA.map(i=>i.dept))].filter(d=>!BS_EXCLUDE_DEPTS.has(d)).sort();
       sel.innerHTML='<option value="">כל המחלקות</option>'+depts.map(d=>'<option value="'+d+'">'+d+'</option>').join('');
     }
+    const selS=document.getElementById('bs-store');
+    if(selS && selS.options.length<=1){
+      const stores=[...new Set(SALES_DATA.map(i=>i.st).filter(Boolean))].sort();
+      selS.innerHTML='<option value="">כל הסניפים</option>'+stores.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+    }
     document.getElementById('bs-content').style.display='block';
     const allowed=_bsAllowed();
     const dept=(document.getElementById('bs-dept')||{}).value||'';
+    const store=(document.getElementById('bs-store')||{}).value||'';
     const term=(((document.getElementById('bs-search')||{}).value)||'').trim();
     const inP = allowed.custom ? (y => y>=allowed.from && y<=allowed.to) : (y => allowed.has(y));
     const agg={}; let totalQ=0;
@@ -3006,6 +3016,7 @@ function renderBestsellers(){
       if(BS_EXCLUDE_DEPTS.has(r.dept)) return;
       if((r.n||'').indexOf('הנחה')>-1) return;
       if(dept && r.dept!==dept) return;
+      if(store && r.st!==store) return;
       if(term && (r.n||'').indexOf(term)===-1) return;
       const k=r.n+'|'+r.dept;
       const g=agg[k]||(agg[k]={n:r.n,dept:r.dept,q:0});
