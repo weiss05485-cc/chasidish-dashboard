@@ -1705,6 +1705,19 @@ function renderTodayPeriodSub() {
     <div class="kpi-sub">${s.trans.toLocaleString()} עסקאות</div>
   </div>`).join('');
 
+  // סימפלי לתקופה: ברוטו מ-ARNET + נטו מהפורטל
+  const _sr = _simplyRange(from, to);
+  const simplyCard = _sr.gross > 0 ? `<div class="kpi-card" style="border:2px solid #6366f1;background:linear-gradient(135deg,#eef2ff,#faf5ff)">
+    <div class="kpi-label" style="font-weight:700;color:#6366f1">🎁 גיפטקארד סימפלי</div>
+    <div class="kpi-value" style="color:#6366f1;font-size:20px">${fmt(_sr.gross)}</div>
+    <div class="kpi-sub">ברוטו${_sr.net != null ? ' · נטו אחרי הנחה ' + fmt(_sr.net) : ''}</div>
+  </div>
+  <div class="kpi-card" style="border:2px solid #4f46e5;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
+    <div class="kpi-label" style="font-weight:700;color:#4f46e5">סה"כ כולל סימפלי</div>
+    <div class="kpi-value" style="color:#4f46e5;font-size:20px">${fmt(agg.totalSales + (_sr.net != null ? _sr.net : _sr.gross))}</div>
+    <div class="kpi-sub">מכירות + סימפלי ${_sr.net != null ? 'נטו' : 'ברוטו'}</div>
+  </div>` : '';
+
   const payItems = agg.payments;
   const row = (label, val) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>${label}</span><span style="font-weight:600">${fmt(val)}</span></div>`;
   const payList    = payItems.map(p => row(p.name, p.sales)).join('') || '<span style="color:var(--muted);font-size:13px">אין נתונים</span>';
@@ -1712,7 +1725,7 @@ function renderTodayPeriodSub() {
   const sellerList = agg.sellers.slice(0,12).map(s => row(s.name, s.sales)).join('') || '<span style="color:var(--muted);font-size:13px">אין נתונים</span>';
 
   document.getElementById('today-period-results').innerHTML = `
-    <div class="kpi-grid" style="margin-bottom:20px">${totalCard}${storeCards}</div>
+    <div class="kpi-grid" style="margin-bottom:20px">${totalCard}${storeCards}${simplyCard}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
       <div class="section"><div class="section-header"><h3>לפי מחלקה</h3></div><div style="padding:4px 0">${deptList}</div></div>
       <div class="section"><div class="section-header"><h3>💳 אמצעי תשלום</h3></div><div style="padding:4px 0">${payList}</div></div>
@@ -2365,6 +2378,22 @@ function _initHebrewSelects() {
   _populateHebrewSelect('comp-b-heb');
 }
 
+// סימפלי לטווח תאריכים: ברוטו מ-ARNET (שורות 'גיפטקארד סימפלי' ב-by_date) + נטו לפי יחס-ההנחה מהפורטל
+function _simplyRange(from, to) {
+  const bd = (TODAY_DATA && TODAY_DATA.by_date) || {};
+  const sn = (TODAY_DATA && TODAY_DATA.simply_net_days) || {};
+  let gross = 0, pGross = 0, pNet = 0;
+  Object.keys(bd).forEach(d => { if (d >= from && d <= to)
+    ((bd[d] || {}).payments || []).forEach(p => { if (p.PayMethod === 'גיפטקארד סימפלי') gross += p.TotalAmount; });
+  });
+  Object.keys(sn).forEach(d => { if (d >= from && d <= to) {
+    const cs = ((sn[d] || {}).byStore || {})['חסידיש'];
+    if (cs) { pGross += cs.gross || 0; pNet += cs.net || 0; }
+  }});
+  const ratio = pGross > 0 ? pNet / pGross : null;
+  return { gross: Math.round(gross), net: ratio != null ? Math.round(gross * ratio) : null };
+}
+
 function _aggregatePeriod(fromDate, toDate) {
   const data = TODAY_DATA;
   const dates = Object.keys(data.by_date).filter(d => d >= fromDate && d <= toDate).sort();
@@ -2388,6 +2417,7 @@ function _aggregatePeriod(fromDate, toDate) {
       sellers[s.SellerName].trans += s.Transactions;
     });
     (day.payments || []).forEach(p => {
+      if (p.PayMethod === 'גיפטקארד סימפלי') return;   // טנדרים בלבד — כמו ARNET; סימפלי מוצג בנפרד
       if (!payments[p.PayMethod]) payments[p.PayMethod] = 0;
       payments[p.PayMethod] += p.TotalAmount;
     });
@@ -2413,6 +2443,10 @@ function renderComparison() {
   }
   const A = _aggregatePeriod(aFrom, aTo);
   const B = _aggregatePeriod(bFrom, bTo);
+
+  // סימפלי לכל תקופה (שורות-מידע נפרדות; לא נכללות במספרי ARNET)
+  const XA = _simplyRange(aFrom, aTo), XB = _simplyRange(bFrom, bTo);
+  const _xnet = x => x.net != null ? x.net : x.gross;
 
   const pA = A.payments;
   const pB = B.payments;
@@ -2489,6 +2523,25 @@ function renderComparison() {
           <td style="padding:6px 8px;text-align:left;color:#7c3aed">${fmt(B.totalSales)}</td>
           <td style="padding:6px 8px;text-align:left">${diff(A.totalSales,B.totalSales)}</td>
         </tr>`)}
+    ${(XA.gross || XB.gross) ? sectionHtml('🎁 גיפטקארד סימפלי',
+        `<tr>
+          <td style="padding:6px 8px">ברוטו (ARNET)</td>
+          <td style="padding:6px 8px;text-align:left;font-weight:600;color:var(--navy)">${fmt(XA.gross)}</td>
+          <td style="padding:6px 8px;text-align:left;font-weight:600;color:#7c3aed">${fmt(XB.gross)}</td>
+          <td style="padding:6px 8px;text-align:left">${diff(XA.gross, XB.gross)}</td>
+        </tr>` +
+        ((XA.net != null || XB.net != null) ? `<tr>
+          <td style="padding:6px 8px">נטו אחרי הנחה</td>
+          <td style="padding:6px 8px;text-align:left;font-weight:600;color:var(--navy)">${fmt(_xnet(XA))}</td>
+          <td style="padding:6px 8px;text-align:left;font-weight:600;color:#7c3aed">${fmt(_xnet(XB))}</td>
+          <td style="padding:6px 8px;text-align:left">${diff(_xnet(XA), _xnet(XB))}</td>
+        </tr>` : '') +
+        `<tr style="background:var(--border);font-weight:700">
+          <td style="padding:6px 8px">סה"כ כולל סימפלי</td>
+          <td style="padding:6px 8px;text-align:left;color:var(--navy)">${fmt(A.totalSales + _xnet(XA))}</td>
+          <td style="padding:6px 8px;text-align:left;color:#7c3aed">${fmt(B.totalSales + _xnet(XB))}</td>
+          <td style="padding:6px 8px;text-align:left">${diff(A.totalSales + _xnet(XA), B.totalSales + _xnet(XB))}</td>
+        </tr>`) : ''}
     ${sectionHtml('לפי מחלקה', mkRows(A.depts, B.depts))}
     ${sectionHtml('לפי מוכר', mkRows(A.sellers, B.sellers))}
   `;
