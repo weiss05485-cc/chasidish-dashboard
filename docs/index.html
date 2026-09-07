@@ -1709,8 +1709,8 @@ function renderTodayPeriodSub() {
   const _sr = _simplyRange(from, to);
   const simplyCard = _sr.gross > 0 ? `<div class="kpi-card" style="border:2px solid #6366f1;background:linear-gradient(135deg,#eef2ff,#faf5ff)">
     <div class="kpi-label" style="font-weight:700;color:#6366f1">🎁 גיפטקארד סימפלי</div>
-    <div class="kpi-value" style="color:#6366f1;font-size:20px">${fmt(_sr.gross)}</div>
-    <div class="kpi-sub">ברוטו${_sr.net != null ? ' · נטו אחרי הנחה ' + fmt(_sr.net) : ''}</div>
+    <div class="kpi-value" style="color:#6366f1;font-size:20px">${fmt(_sr.net != null ? _sr.net : _sr.gross)}</div>
+    <div class="kpi-sub">${_sr.net != null ? 'נטו אחרי הנחה · ברוטו ' + fmt(_sr.gross) : 'ברוטו'}</div>
   </div>
   <div class="kpi-card" style="border:2px solid #4f46e5;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
     <div class="kpi-label" style="font-weight:700;color:#4f46e5">סה"כ כולל סימפלי</div>
@@ -1805,8 +1805,8 @@ function _renderTodayContent() {
     </div>` : '') +
     (simplyInfo && simplyInfo.gross > 0 ? `<div class="kpi-card" style="border:2px solid #6366f1;background:linear-gradient(135deg,#eef2ff,#faf5ff)">
       <div class="kpi-label" style="font-weight:700;color:#6366f1">🎁 גיפטקארד סימפלי</div>
-      <div class="kpi-value" style="color:#6366f1;font-size:21px">${fmt(simplyInfo.gross)}</div>
-      <div class="kpi-sub">ברוטו${simplyInfo.net != null ? ' · נטו ' + fmt(simplyInfo.net) : ''}${simplyStale ? ' · מהמטמון' : ''}</div>
+      <div class="kpi-value" style="color:#6366f1;font-size:21px">${fmt(simplyInfo.net != null ? simplyInfo.net : simplyInfo.gross)}</div>
+      <div class="kpi-sub">${simplyInfo.net != null ? 'נטו אחרי הנחה · ברוטו ' + fmt(simplyInfo.gross) : 'ברוטו'}${simplyStale ? ' · מהמטמון' : ''}</div>
     </div>` : '') +
     (totSales > 0 && simplyInfo && simplyInfo.net != null && simplyInfo.net > 0 ? `<div class="kpi-card" style="border:2px solid #4f46e5;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
       <div class="kpi-label" style="font-weight:700;color:#4f46e5">סה"כ כולל סימפלי</div>
@@ -1884,9 +1884,9 @@ function _renderTodayContent() {
     ? `<div style="margin-top:10px;padding:10px 12px;background:linear-gradient(135deg,#eef2ff,#faf5ff);border:1px solid #e0e7ff;border-radius:10px">
          <div style="display:flex;justify-content:space-between;align-items:center">
            <span style="font-weight:700;color:#6366f1">🎁 גיפטקארד סימפלי${_payStore !== 'all' ? ' · ' + _payStore : ''}</span>
-           <span style="font-weight:800;color:#6366f1;font-size:14px">${fmt(paySimply.gross)}</span>
+           <span style="font-weight:800;color:#6366f1;font-size:14px">${fmt(paySimply.net != null ? paySimply.net : paySimply.gross)}</span>
          </div>
-         <div style="font-size:11px;color:var(--muted);margin-top:2px">ברוטו${paySimply.net != null ? ' · נטו אחרי הנחה ' + fmt(paySimply.net) + ' (' + paySimply.pct.toFixed(1) + '%)' : ''}${simplyStale ? ' · <span style="color:#b45309">מהמטמון</span>' : ''} · לא נכלל בסך אמצעי התשלום</div>
+         <div style="font-size:11px;color:var(--muted);margin-top:2px">${paySimply.net != null ? 'נטו אחרי הנחה (' + paySimply.pct.toFixed(1) + '%) · ברוטו ' + fmt(paySimply.gross) : 'ברוטו'}${simplyStale ? ' · <span style="color:#b45309">מהמטמון</span>' : ''} · לא נכלל בסך אמצעי התשלום</div>
        </div>`
     : '';
   document.getElementById('today-payment-list').innerHTML = payFilter + payHtml + simplyLine;
@@ -2524,18 +2524,18 @@ function renderComparison() {
           <td style="padding:6px 8px;text-align:left">${diff(A.totalSales,B.totalSales)}</td>
         </tr>`)}
     ${(XA.gross || XB.gross) ? sectionHtml('🎁 גיפטקארד סימפלי',
-        `<tr>
-          <td style="padding:6px 8px">ברוטו (ARNET)</td>
-          <td style="padding:6px 8px;text-align:left;font-weight:600;color:var(--navy)">${fmt(XA.gross)}</td>
-          <td style="padding:6px 8px;text-align:left;font-weight:600;color:#7c3aed">${fmt(XB.gross)}</td>
-          <td style="padding:6px 8px;text-align:left">${diff(XA.gross, XB.gross)}</td>
-        </tr>` +
         ((XA.net != null || XB.net != null) ? `<tr>
-          <td style="padding:6px 8px">נטו אחרי הנחה</td>
+          <td style="padding:6px 8px;font-weight:600">נטו אחרי הנחה</td>
           <td style="padding:6px 8px;text-align:left;font-weight:600;color:var(--navy)">${fmt(_xnet(XA))}</td>
           <td style="padding:6px 8px;text-align:left;font-weight:600;color:#7c3aed">${fmt(_xnet(XB))}</td>
           <td style="padding:6px 8px;text-align:left">${diff(_xnet(XA), _xnet(XB))}</td>
         </tr>` : '') +
+        `<tr>
+          <td style="padding:6px 8px;color:var(--muted)">ברוטו (ARNET)</td>
+          <td style="padding:6px 8px;text-align:left;color:var(--navy)">${fmt(XA.gross)}</td>
+          <td style="padding:6px 8px;text-align:left;color:#7c3aed">${fmt(XB.gross)}</td>
+          <td style="padding:6px 8px;text-align:left">${diff(XA.gross, XB.gross)}</td>
+        </tr>` +
         `<tr style="background:var(--border);font-weight:700">
           <td style="padding:6px 8px">סה"כ כולל סימפלי</td>
           <td style="padding:6px 8px;text-align:left;color:var(--navy)">${fmt(A.totalSales + _xnet(XA))}</td>
