@@ -3,7 +3,7 @@ name: Lookup Barcode
 on:
   push:
     branches: [claude/arnett-agent-83ekbl]
-    paths: ['lookup_request.txt']
+    paths: ['lookup_request.txt', 'lookup_barcode.py']
   workflow_dispatch:
     inputs:
       barcode:
