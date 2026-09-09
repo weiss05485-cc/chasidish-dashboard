@@ -1,0 +1,45 @@
+name: Lookup Barcode
+
+on:
+  workflow_dispatch:
+    inputs:
+      barcode:
+        description: 'ברקוד לבדיקה'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Asia/Jerusalem
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install pymssql
+
+      - name: Lookup
+        env:
+          DB_SERVER:    ${{ secrets.DB_SERVER }}
+          DB_NAME:      ${{ secrets.DB_NAME }}
+          DB_USER:      ${{ secrets.DB_USER }}
+          DB_PASSWORD:  ${{ secrets.DB_PASSWORD }}
+          DB2_SERVER:   ${{ secrets.DB2_SERVER }}
+          DB2_NAME:     ${{ secrets.DB2_NAME }}
+          DB2_USER:     ${{ secrets.DB2_USER }}
+          DB2_PASSWORD: ${{ secrets.DB2_PASSWORD }}
+          DB2_LABEL:    ${{ secrets.DB2_LABEL }}
+          BARCODE:      ${{ inputs.barcode }}
+        run: python lookup_barcode.py
