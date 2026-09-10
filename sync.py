@@ -83,9 +83,15 @@ ONHAND_CTE = """
 def build_db(conn):
     cur = conn.cursor()
 
+    # מטריאליזציה של OnHand פעם אחת ל-#temp — במקום להריץ את ה-CTE הכבד בכל שאילתה
+    # (אותו דפוס כמו בדשבורד הראשי; ~97% פחות עומס על שרת ARNET המשותף)
+    print("  Materializing #OnHand...")
+    cur.execute("IF OBJECT_ID('tempdb..#OnHand') IS NOT NULL DROP TABLE #OnHand;")
+    cur.execute(ONHAND_CTE + " SELECT ItemID, StoreID, Qty INTO #OnHand FROM OnHand;")
+    cur.execute("CREATE INDEX ix_onhand ON #OnHand (ItemID, StoreID);")
+
     print("  Store summary...")
     store_summary = q(cur, f"""
-        {ONHAND_CTE}
         SELECT
             st.StoreName,
             st.Code AS StoreCode,
@@ -98,7 +104,7 @@ def build_db(conn):
             CAST(SUM(CASE WHEN oh.Qty > 0 THEN oh.Qty ELSE 0 END) AS DECIMAL(18,1)) AS TotalUnits,
             CAST(SUM(CASE WHEN oh.Qty > 0 THEN oh.Qty * ISNULL(ist.AVGCost, 0) ELSE 0 END)
                  AS DECIMAL(18,0)) AS StockValue
-        FROM OnHand oh
+        FROM #OnHand oh
         JOIN Store st ON oh.StoreID = st.StoreID AND st.Status = 1
         JOIN ItemStore ist ON oh.ItemID = ist.ItemID AND oh.StoreID = ist.StoreID
         JOIN ItemMain im ON oh.ItemID = im.ItemID AND im.Status = 1
@@ -112,7 +118,6 @@ def build_db(conn):
 
     print("  Low stock items...")
     low_stock = q(cur, f"""
-        {ONHAND_CTE}
         SELECT TOP 300
             im.Name, im.BarcodeNumber, im.ModelNumber,
             st.StoreName,
@@ -120,7 +125,7 @@ def build_db(conn):
             CAST(ist.ReorderPoint AS DECIMAL(18,1)) AS ReorderPoint,
             CAST(COALESCE(NULLIF(ist.AVCostWithoutTax, 0), NULLIF(ist.CostWithoutTax, 0), NULLIF(ist.AVGCost / 1.18, 0)) AS DECIMAL(18,2)) AS Price,
             d.Name AS Department
-        FROM OnHand oh
+        FROM #OnHand oh
         JOIN ItemStore ist ON oh.ItemID = ist.ItemID AND oh.StoreID = ist.StoreID
         JOIN ItemMain im ON oh.ItemID = im.ItemID AND im.Status = 1
         JOIN Store st ON oh.StoreID = st.StoreID AND st.Status = 1
@@ -135,7 +140,6 @@ def build_db(conn):
 
     print("  Department breakdown...")
     by_department = q(cur, f"""
-        {ONHAND_CTE}
         SELECT
             ISNULL(d.Name, N'ללא מחלקה') AS Department,
             st.StoreName,
@@ -143,7 +147,7 @@ def build_db(conn):
             CAST(SUM(CASE WHEN oh.Qty > 0 THEN oh.Qty ELSE 0 END) AS DECIMAL(18,1)) AS TotalUnits,
             CAST(SUM(CASE WHEN oh.Qty > 0 THEN oh.Qty * ISNULL(ist.AVGCost, 0) ELSE 0 END)
                  AS DECIMAL(18,0)) AS Value
-        FROM OnHand oh
+        FROM #OnHand oh
         JOIN ItemStore ist ON oh.ItemID = ist.ItemID AND oh.StoreID = ist.StoreID
         JOIN ItemMain im ON oh.ItemID = im.ItemID AND im.Status = 1
         JOIN Store st ON oh.StoreID = st.StoreID AND st.Status = 1
@@ -159,7 +163,6 @@ def build_db(conn):
 
     print("  Search items...")
     flat_items = q(cur, f"""
-        {ONHAND_CTE}
         SELECT
             im.Name,
             im.BarcodeNumber,
@@ -168,7 +171,7 @@ def build_db(conn):
             CAST(oh.Qty AS DECIMAL(18,1)) AS Qty,
             d.Name AS Department,
             CAST(COALESCE(NULLIF(ist.AVCostWithoutTax, 0), NULLIF(ist.CostWithoutTax, 0), NULLIF(ist.AVGCost / 1.18, 0)) AS DECIMAL(18,2)) AS Price
-        FROM OnHand oh
+        FROM #OnHand oh
         JOIN ItemStore ist ON oh.ItemID = ist.ItemID AND oh.StoreID = ist.StoreID
         JOIN ItemMain im ON oh.ItemID = im.ItemID AND im.Status = 1
         JOIN Store st ON oh.StoreID = st.StoreID AND st.Status = 1
@@ -287,7 +290,6 @@ def build_db(conn):
 
     print("  Sales by group/size/month...")
     sales_raw = q(cur, f"""
-        {ONHAND_CTE}
         SELECT
             im.Name,
             im.BarcodeNumber,
@@ -340,7 +342,6 @@ def build_db(conn):
 
     print("  Reports by group/size...")
     report_raw = q(cur, f"""
-        {ONHAND_CTE}
         SELECT
             im.Name,
             im.BarcodeNumber,
@@ -348,7 +349,7 @@ def build_db(conn):
             ISNULL(ig.ItemGroupName, N'ללא קבוצה') AS GroupName,
             st.StoreName,
             CAST(SUM(oh.Qty) AS DECIMAL(18,1)) AS Qty
-        FROM OnHand oh
+        FROM #OnHand oh
         JOIN ItemStore ist ON oh.ItemID = ist.ItemID AND oh.StoreID = ist.StoreID
         JOIN ItemMain im ON oh.ItemID = im.ItemID AND im.Status = 1
         JOIN Store st ON oh.StoreID = st.StoreID AND st.Status = 1
