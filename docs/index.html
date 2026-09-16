@@ -1787,7 +1787,7 @@ function exportZReports() {
   const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const r2 = v => Math.round(v * 100) / 100;
   const rows = [];
-  rows.push(['תאריך','יום'].concat(single ? [] : ['סניף'], ['עסקאות','סה"כ מכירות'], methods, ['סה"כ תקבולים', SIMPLY + ' (מידע)']));
+  rows.push(['תאריך','יום'].concat(single ? [] : ['סניף'], ['עסקאות','סה"כ מכירות','חייב במע"מ','מע"מ'], methods, ['סה"כ תקבולים', SIMPLY + ' (מידע)']));
   const sum = {tr: 0, sales: 0, pays: {}, simply: 0};
   days.forEach(d => {
     const day = bd[d];
@@ -1799,17 +1799,19 @@ function exportZReports() {
       });
       const ptot = Object.values(pm).reduce((a, b) => a + b, 0);
       const [y, m, dd] = d.split('-').map(Number);
+      const vat = r2(s.TotalSales * 0.18 / 1.18);   // אותה נוסחה כמו דוח Z של ARNET
       rows.push([dd + '/' + m + '/' + y, DAYS[new Date(y, m - 1, dd).getDay()]].concat(
         single ? [] : [s.StoreName],
-        [s.Transactions, r2(s.TotalSales)],
+        [s.Transactions, r2(s.TotalSales), r2(s.TotalSales - vat), vat],
         methods.map(mm => pm[mm] ? r2(pm[mm]) : ''),
         [r2(ptot), simply ? r2(simply) : '']));
       sum.tr += (s.Transactions || 0); sum.sales += s.TotalSales; sum.simply += simply;
       methods.forEach(mm => sum.pays[mm] = (sum.pays[mm] || 0) + (pm[mm] || 0));
     });
   });
+  const sumVat = r2(sum.sales * 0.18 / 1.18);
   rows.push(['סה"כ',''].concat(single ? [] : [''],
-    [sum.tr, r2(sum.sales)],
+    [sum.tr, r2(sum.sales), r2(sum.sales - sumVat), sumVat],
     methods.map(mm => r2(sum.pays[mm] || 0)),
     [r2(Object.values(sum.pays).reduce((a, b) => a + b, 0)), sum.simply ? r2(sum.simply) : '']));
 
@@ -1831,7 +1833,50 @@ function exportZReports() {
     rows.push(['סה"כ צ\'קים', '', r2(chkTot), chkRows.length + ' צ\'קים', '', '', '', '']);
   }
 
-  downloadCSV(rows, 'דוחות-Z-' + (selStores.length ? selStores.join('+') : 'כל-הסניפים') + '-' + from + '-עד-' + to + '.csv');
+  const storeLbl = selStores.length ? selStores.join(' + ') : 'כל הסניפים';
+  _downloadZXls(rows, storeLbl, from, to);
+}
+
+// בונה קובץ Excel מעוצב (HTML .xls) בסגנון דוח ה-Z של ARNET — כותרת, RTL, סיכומים מודגשים
+function _downloadZXls(rows, storeLbl, from, to) {
+  const fmtD = s => s.split('-').reverse().join('/');
+  const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const td = (v, extra) => {
+    const num = typeof v === 'number';
+    return '<td style="border:1px solid #d0d5e3;padding:4px 8px;' +
+      (num ? "mso-number-format:'#,##0.00';text-align:left;" : '') + (extra || '') + '">' +
+      (num ? v : esc(v)) + '</td>';
+  };
+  let html = '<div dir="rtl" style="font-family:Arial">';
+  html += '<div style="font-size:18pt;font-weight:bold;color:#312e81">דוחות Z קופות — חסידיש</div>';
+  html += '<div style="font-size:11pt;color:#555">' + esc(storeLbl) + ' · מתאריך ' + fmtD(from) + ' לתאריך ' + fmtD(to) + '</div><br>';
+  html += '<table dir="rtl" style="border-collapse:collapse;font-size:10pt">';
+  let inChecks = false;
+  rows.forEach((r, i) => {
+    if (!r.length) { html += '</table><br>'; return; }
+    if (r.length === 1 && r[0] === "פירוט צ'קים") {
+      html += '<div style="font-size:13pt;font-weight:bold;color:#312e81">פירוט צ&#39;קים</div>';
+      html += '<table dir="rtl" style="border-collapse:collapse;font-size:10pt">';
+      inChecks = true; return;
+    }
+    const isHeader = i === 0 || (inChecks && r[0] === 'תאריך קנייה');
+    const isTotal = typeof r[0] === 'string' && r[0].indexOf('סה"כ') === 0;
+    if (isHeader) {
+      html += '<tr>' + r.map(v => '<th style="border:1px solid #312e81;background:#312e81;color:#fff;padding:5px 8px;white-space:nowrap">' + esc(v) + '</th>').join('') + '</tr>';
+    } else if (isTotal) {
+      html += '<tr>' + r.map(v => td(v, 'background:#e0e7ff;font-weight:bold;')).join('') + '</tr>';
+    } else {
+      html += '<tr>' + r.map(v => td(v)).join('') + '</tr>';
+    }
+  });
+  html += '</table></div>';
+  const doc = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>דוחות Z</x:Name><x:WorksheetOptions><x:DisplayRightToLeft/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>' + html + '</body></html>';
+  const blob = new Blob(['﻿', doc], {type: 'application/vnd.ms-excel'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'דוחות-Z-' + storeLbl.replace(/ \+ /g, '+') + '-' + from + '-עד-' + to + '.xls';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
 let _payStore = 'all';   // סינון אמצעי תשלום לפי סניף (all = כל הסניפים מסוכמים)
