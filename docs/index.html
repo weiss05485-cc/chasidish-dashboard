@@ -1011,7 +1011,8 @@ body.emp-mode .price-col{display:none!important}
           <input type="date" id="period-sub-to"   onchange="renderTodayPeriodSub()" style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           <span id="period-sub-label" style="color:var(--muted);font-size:12px"></span>
           <span style="border-right:1px solid var(--border);height:22px;margin:0 4px"></span>
-          <select id="z-store" style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:'Rubik',sans-serif"><option value="">כל הסניפים</option></select>
+          <span style="font-size:11px;color:var(--muted);font-weight:600">סניפים:</span>
+          <span id="z-stores" style="display:inline-flex;gap:4px;flex-wrap:wrap;align-items:center" title="לא נבחר = כל הסניפים; אפשר לבחור כמה"></span>
           <button class="btn btn-export" onclick="exportZReports()" style="padding:5px 12px;font-size:12px">⬇️ דוחות Z</button>
         </div>
       </div>
@@ -1576,6 +1577,7 @@ function renderToday() {
     TODAY_DATA = data;
     _todaySelectedDate = data.today; // ברירת מחדל: היום
       document.getElementById('today-loading').style.display = 'none';
+      document.getElementById('today-no-file').style.display = 'none';
       document.getElementById('today-content').style.display = 'block';
       // set date range limits on comparison pickers
       const allDates = data.daily.map(d => d.SaleDate).sort();
@@ -1590,7 +1592,7 @@ function renderToday() {
     })
     .catch(() => {
       document.getElementById('today-loading').style.display = 'none';
-      document.getElementById('today-no-file').style.display = 'block';
+      if (!TODAY_DATA) document.getElementById('today-no-file').style.display = 'block';   // לא להציג אם כבר יש נתונים
     });
 }
 
@@ -1744,13 +1746,22 @@ function todayPickDate(val) {
 
 /* ── ייצוא דוחות Z (יומי, פר-סניף, פירוט אמצעי תשלום) ── */
 function _fillZStores() {
-  const sel = document.getElementById('z-store');
-  if (!sel || sel.options.length > 1 || !TODAY_DATA) return;
+  const box = document.getElementById('z-stores');
+  if (!box || box.children.length || !TODAY_DATA) return;
   const names = new Set();
   Object.values(TODAY_DATA.by_date || {}).forEach(day =>
     (day.stores || []).forEach(s => names.add(s.StoreName)));
   [...names].sort().forEach(n => {
-    const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'zst'; b.dataset.s = n; b.textContent = n;
+    b.style.cssText = 'padding:4px 10px;border-radius:16px;border:1.5px solid var(--border);background:var(--card);font-size:11px;font-weight:600;cursor:pointer;font-family:Rubik,sans-serif;transition:all .15s';
+    b.onclick = () => {
+      const on = b.classList.toggle('active');
+      b.style.background = on ? 'var(--primary)' : 'var(--card)';
+      b.style.color = on ? '#fff' : '';
+      b.style.borderColor = on ? 'transparent' : 'var(--border)';
+    };
+    box.appendChild(b);
   });
 }
 function exportZReports() {
@@ -1758,7 +1769,10 @@ function exportZReports() {
   _fillZStores();
   const from  = document.getElementById('period-sub-from').value || '2020-01-01';
   const to    = document.getElementById('period-sub-to').value   || (TODAY_DATA.today || '2099-12-31');
-  const store = (document.getElementById('z-store') || {}).value || '';
+  // בחירת סניפים מרובה: אף אחד מסומן = כל הסניפים
+  const selStores = [...document.querySelectorAll('#z-stores .zst.active')].map(b => b.dataset.s);
+  const inStore = n => !selStores.length || selStores.includes(n);
+  const single = selStores.length === 1;   // סניף יחיד → בלי עמודת "סניף"
   const bd = TODAY_DATA.by_date || {};
   const days = Object.keys(bd).filter(d => d >= from && d <= to).sort();
   const SIMPLY = 'גיפטקארד סימפלי';
@@ -1766,18 +1780,18 @@ function exportZReports() {
   const tot = {};
   days.forEach(d => (bd[d].payments || []).forEach(p => {
     if (p.PayMethod === SIMPLY) return;
-    if (store && p.StoreName !== store) return;
+    if (!inStore(p.StoreName)) return;
     tot[p.PayMethod] = (tot[p.PayMethod] || 0) + p.TotalAmount;
   }));
   const methods = Object.keys(tot).sort((a, b) => Math.abs(tot[b]) - Math.abs(tot[a]));
   const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const r2 = v => Math.round(v * 100) / 100;
   const rows = [];
-  rows.push(['תאריך','יום'].concat(store ? [] : ['סניף'], ['עסקאות','סה"כ מכירות'], methods, ['סה"כ תקבולים', SIMPLY + ' (מידע)']));
+  rows.push(['תאריך','יום'].concat(single ? [] : ['סניף'], ['עסקאות','סה"כ מכירות'], methods, ['סה"כ תקבולים', SIMPLY + ' (מידע)']));
   const sum = {tr: 0, sales: 0, pays: {}, simply: 0};
   days.forEach(d => {
     const day = bd[d];
-    (day.stores || []).filter(s => !store || s.StoreName === store).forEach(s => {
+    (day.stores || []).filter(s => inStore(s.StoreName)).forEach(s => {
       const pm = {}; let simply = 0;
       (day.payments || []).filter(p => p.StoreName === s.StoreName).forEach(p => {
         if (p.PayMethod === SIMPLY) simply += p.TotalAmount;
@@ -1786,7 +1800,7 @@ function exportZReports() {
       const ptot = Object.values(pm).reduce((a, b) => a + b, 0);
       const [y, m, dd] = d.split('-').map(Number);
       rows.push([dd + '/' + m + '/' + y, DAYS[new Date(y, m - 1, dd).getDay()]].concat(
-        store ? [] : [s.StoreName],
+        single ? [] : [s.StoreName],
         [s.Transactions, r2(s.TotalSales)],
         methods.map(mm => pm[mm] ? r2(pm[mm]) : ''),
         [r2(ptot), simply ? r2(simply) : '']));
@@ -1794,7 +1808,7 @@ function exportZReports() {
       methods.forEach(mm => sum.pays[mm] = (sum.pays[mm] || 0) + (pm[mm] || 0));
     });
   });
-  rows.push(['סה"כ',''].concat(store ? [] : [''],
+  rows.push(['סה"כ',''].concat(single ? [] : [''],
     [sum.tr, r2(sum.sales)],
     methods.map(mm => r2(sum.pays[mm] || 0)),
     [r2(Object.values(sum.pays).reduce((a, b) => a + b, 0)), sum.simply ? r2(sum.simply) : '']));
@@ -1803,7 +1817,7 @@ function exportZReports() {
   const chkRows = [];
   let chkTot = 0;
   days.forEach(d => (bd[d].checks || []).forEach(c => {
-    if (store && c.StoreName !== store) return;
+    if (!inStore(c.StoreName)) return;
     const [y, m, dd] = d.split('-').map(Number);
     const due = c.DueDate ? c.DueDate.split('-').reverse().join('/') : '';
     chkRows.push([dd + '/' + m + '/' + y, c.StoreName, r2(c.Amount), c.CheckNo || '', due, c.Bank || '', c.Branch || '', c.Account || '']);
@@ -1817,7 +1831,7 @@ function exportZReports() {
     rows.push(['סה"כ צ\'קים', '', r2(chkTot), chkRows.length + ' צ\'קים', '', '', '', '']);
   }
 
-  downloadCSV(rows, 'דוחות-Z-' + (store || 'כל-הסניפים') + '-' + from + '-עד-' + to + '.csv');
+  downloadCSV(rows, 'דוחות-Z-' + (selStores.length ? selStores.join('+') : 'כל-הסניפים') + '-' + from + '-עד-' + to + '.csv');
 }
 
 let _payStore = 'all';   // סינון אמצעי תשלום לפי סניף (all = כל הסניפים מסוכמים)
