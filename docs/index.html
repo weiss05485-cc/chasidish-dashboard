@@ -1798,6 +1798,25 @@ function exportZReports() {
     [sum.tr, r2(sum.sales)],
     methods.map(mm => r2(sum.pays[mm] || 0)),
     [r2(Object.values(sum.pays).reduce((a, b) => a + b, 0)), sum.simply ? r2(sum.simply) : '']));
+
+  // ── פירוט צ'קים (להנה"ח) ──
+  const chkRows = [];
+  let chkTot = 0;
+  days.forEach(d => (bd[d].checks || []).forEach(c => {
+    if (store && c.StoreName !== store) return;
+    const [y, m, dd] = d.split('-').map(Number);
+    const due = c.DueDate ? c.DueDate.split('-').reverse().join('/') : '';
+    chkRows.push([dd + '/' + m + '/' + y, c.StoreName, r2(c.Amount), c.CheckNo || '', due, c.Bank || '', c.Branch || '', c.Account || '']);
+    chkTot += c.Amount;
+  }));
+  if (chkRows.length) {
+    rows.push([]);
+    rows.push(['פירוט צ\'קים']);
+    rows.push(['תאריך קנייה', 'סניף', 'סכום', 'מספר צ\'ק', 'ז.פירעון', 'בנק', 'סניף בנק', 'חשבון']);
+    chkRows.forEach(r => rows.push(r));
+    rows.push(['סה"כ צ\'קים', '', r2(chkTot), chkRows.length + ' צ\'קים', '', '', '', '']);
+  }
+
   downloadCSV(rows, 'דוחות-Z-' + (store || 'כל-הסניפים') + '-' + from + '-עד-' + to + '.csv');
 }
 
