@@ -1010,6 +1010,9 @@ body.emp-mode .price-col{display:none!important}
           <span style="color:var(--muted)">עד:</span>
           <input type="date" id="period-sub-to"   onchange="renderTodayPeriodSub()" style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           <span id="period-sub-label" style="color:var(--muted);font-size:12px"></span>
+          <span style="border-right:1px solid var(--border);height:22px;margin:0 4px"></span>
+          <select id="z-store" style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:'Rubik',sans-serif"><option value="">כל הסניפים</option></select>
+          <button class="btn btn-export" onclick="exportZReports()" style="padding:5px 12px;font-size:12px">⬇️ דוחות Z</button>
         </div>
       </div>
       <!-- Period results (hidden by default) -->
@@ -1739,11 +1742,71 @@ function todayPickDate(val) {
   _renderTodayContent();
 }
 
+/* ── ייצוא דוחות Z (יומי, פר-סניף, פירוט אמצעי תשלום) ── */
+function _fillZStores() {
+  const sel = document.getElementById('z-store');
+  if (!sel || sel.options.length > 1 || !TODAY_DATA) return;
+  const names = new Set();
+  Object.values(TODAY_DATA.by_date || {}).forEach(day =>
+    (day.stores || []).forEach(s => names.add(s.StoreName)));
+  [...names].sort().forEach(n => {
+    const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+  });
+}
+function exportZReports() {
+  if (!TODAY_DATA) return;
+  _fillZStores();
+  const from  = document.getElementById('period-sub-from').value || '2020-01-01';
+  const to    = document.getElementById('period-sub-to').value   || (TODAY_DATA.today || '2099-12-31');
+  const store = (document.getElementById('z-store') || {}).value || '';
+  const bd = TODAY_DATA.by_date || {};
+  const days = Object.keys(bd).filter(d => d >= from && d <= to).sort();
+  const SIMPLY = 'גיפטקארד סימפלי';
+  // עמודות טנדרים (ללא סימפלי), הגדולים קודם
+  const tot = {};
+  days.forEach(d => (bd[d].payments || []).forEach(p => {
+    if (p.PayMethod === SIMPLY) return;
+    if (store && p.StoreName !== store) return;
+    tot[p.PayMethod] = (tot[p.PayMethod] || 0) + p.TotalAmount;
+  }));
+  const methods = Object.keys(tot).sort((a, b) => Math.abs(tot[b]) - Math.abs(tot[a]));
+  const DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const r2 = v => Math.round(v * 100) / 100;
+  const rows = [];
+  rows.push(['תאריך','יום'].concat(store ? [] : ['סניף'], ['עסקאות','סה"כ מכירות'], methods, ['סה"כ תקבולים', SIMPLY + ' (מידע)']));
+  const sum = {tr: 0, sales: 0, pays: {}, simply: 0};
+  days.forEach(d => {
+    const day = bd[d];
+    (day.stores || []).filter(s => !store || s.StoreName === store).forEach(s => {
+      const pm = {}; let simply = 0;
+      (day.payments || []).filter(p => p.StoreName === s.StoreName).forEach(p => {
+        if (p.PayMethod === SIMPLY) simply += p.TotalAmount;
+        else pm[p.PayMethod] = (pm[p.PayMethod] || 0) + p.TotalAmount;
+      });
+      const ptot = Object.values(pm).reduce((a, b) => a + b, 0);
+      const [y, m, dd] = d.split('-').map(Number);
+      rows.push([dd + '/' + m + '/' + y, DAYS[new Date(y, m - 1, dd).getDay()]].concat(
+        store ? [] : [s.StoreName],
+        [s.Transactions, r2(s.TotalSales)],
+        methods.map(mm => pm[mm] ? r2(pm[mm]) : ''),
+        [r2(ptot), simply ? r2(simply) : '']));
+      sum.tr += (s.Transactions || 0); sum.sales += s.TotalSales; sum.simply += simply;
+      methods.forEach(mm => sum.pays[mm] = (sum.pays[mm] || 0) + (pm[mm] || 0));
+    });
+  });
+  rows.push(['סה"כ',''].concat(store ? [] : [''],
+    [sum.tr, r2(sum.sales)],
+    methods.map(mm => r2(sum.pays[mm] || 0)),
+    [r2(Object.values(sum.pays).reduce((a, b) => a + b, 0)), sum.simply ? r2(sum.simply) : '']));
+  downloadCSV(rows, 'דוחות-Z-' + (store || 'כל-הסניפים') + '-' + from + '-עד-' + to + '.csv');
+}
+
 let _payStore = 'all';   // סינון אמצעי תשלום לפי סניף (all = כל הסניפים מסוכמים)
 function setPayStore(s) { _payStore = s; _renderTodayContent(); }
 
 function _renderTodayContent() {
   if (!TODAY_DATA) return;
+  _fillZStores();
   const data = TODAY_DATA;
   const selDate = _todaySelectedDate || data.today;
   const fmt = n => '₪' + parseFloat(_showExVAT ? n/1.18 : n).toLocaleString('he-IL', {minimumFractionDigits:2, maximumFractionDigits:2});
