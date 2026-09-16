@@ -172,6 +172,30 @@ def collect(conn):
         r['TotalAmount'] = round(float(r['TotalAmount']), 2)
         r['Cnt'] = int(r['Cnt'])
 
+    # ── 5b. פירוט צ'קים × יום (לדוחות Z של הנה"ח) ──
+    cur.execute("""
+        SELECT
+            CONVERT(VARCHAR(10), t.SaleTime, 23)      AS SaleDate,
+            st.StoreName                              AS StoreName,
+            te.Amount                                 AS Amount,
+            ISNULL(te.No, '')                         AS CheckNo,
+            CONVERT(VARCHAR(10), te.CHDueDate, 23)    AS DueDate,
+            ISNULL(te.CHBankNo, '')                   AS Bank,
+            ISNULL(te.CHBranchNo, '')                 AS Branch,
+            ISNULL(te.CHAccountNo, '')                AS Account
+        FROM TenderEntry te
+        JOIN [Transaction] t ON te.TransactionID = t.TransactionID
+        JOIN Store st        ON t.StoreID = st.StoreID AND st.Status=1
+        JOIN Tender tn       ON te.TenderID = tn.TenderID
+        WHERE t.Status > -1 AND te.Status > -1
+          AND tn.TenderNameHe LIKE N'%צ%ק%'
+        ORDER BY t.SaleTime
+    """)
+    cols = [d[0] for d in cur.description]
+    checks_raw = [dict(zip(cols, r)) for r in cur.fetchall()]
+    for r in checks_raw:
+        r['Amount'] = round(float(r['Amount']), 2)
+
     # ── 6. רווחית (אם קיים) ──
     try:
         cur.execute("SELECT Year, Month, Total, Cnt, UpdatedAt FROM RivhitMonthly ORDER BY Year, Month")
@@ -390,6 +414,7 @@ def collect(conn):
     return {
         'stores': stores_raw, 'depts': depts_raw, 'sellers': sellers_raw,
         'daily': daily, 'payments': payments_raw, 'hours': hours_raw,
+        'checks': checks_raw,
         'rivhit': rivhit_raw, 'rivhit_invoices': rivhit_invoices_raw,
         'sup_monthly': sup_monthly_raw, 'sup_docs': sup_docs_raw,
         'presence': presence_raw, 'promo_rows': promo_rows,
@@ -427,6 +452,8 @@ def main():
             for r in part['hours']:
                 r['StoreName'] = lbl
             for r in part['payments']:
+                r['StoreName'] = lbl
+            for r in part['checks']:
                 r['StoreName'] = lbl
             for r in part['presence']:
                 r['StoreName'] = lbl
@@ -467,7 +494,7 @@ def main():
     promos = sorted(promo_by.values(), key=lambda p: -_ptot(p))
 
     # ── ארגון לפי תאריך ──
-    by_date = defaultdict(lambda: {'stores': [], 'depts': [], 'sellers': [], 'payments': []})
+    by_date = defaultdict(lambda: {'stores': [], 'depts': [], 'sellers': [], 'payments': [], 'checks': []})
     for r in stores:
         dt = r.pop('SaleDate'); by_date[dt]['stores'].append(r)
     for r in depts:
@@ -476,6 +503,8 @@ def main():
         dt = r.pop('SaleDate'); by_date[dt]['sellers'].append(r)
     for r in payments:
         dt = r.pop('SaleDate'); by_date[dt]['payments'].append(r)
+    for r in cat('checks'):
+        dt = r.pop('SaleDate'); by_date[dt]['checks'].append(r)
 
     # ── נטו סימפלי מהפורטל: הערך האמיתי של מימושי הגיפטקארד היום, אחרי אחוז ההנחה של הקהילה ──
     # (נכשל בשקט — אם הפורטל/סשן סימפלי לא זמין, פשוט לא נציג נטו; הברוטו מ-ARNET תמיד קיים)
