@@ -1494,7 +1494,9 @@ function loadMainData() {
     const pm = lu.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
     if (pm && strip) {
       const updated = new Date(+pm[3], +pm[2]-1, +pm[1], +pm[4], +pm[5]);
-      if ((Date.now() - updated.getTime()) / 3600000 > 3) {
+      const _age=(Date.now() - updated.getTime()) / 3600000; const _h=new Date().getHours();
+      if (_h>=1 && _h<9 && _age<10) { upd.forEach(el => el.textContent = '🌙 השהיית לילה · יתעדכן ב־09:00 · עדכון אחרון: ' + lu); }
+      else if (_age > 3) {
         strip.querySelectorAll('.strip-dot').forEach(d => { d.style.background = '#fb923c'; d.style.animationDuration = '1s'; });
         strip.style.setProperty('color', '#fde68a');
         upd.forEach(el => el.textContent = '⚠️ נתונים לא עדכניים · עדכון אחרון: ' + lu);
