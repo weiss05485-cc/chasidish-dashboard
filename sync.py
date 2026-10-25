@@ -499,6 +499,11 @@ def main():
         json.dump(merged['report_items'], f, ensure_ascii=False, default=serial)
     with open("docs/sales.json", "w", encoding="utf-8") as f:
         json.dump(merged['sales_items'], f, ensure_ascii=False, default=serial)
+    try:  # משתמשים נוספים שאינם ב-ARNET (extra_users.json בשרת, מחוץ ל-git)
+        _extra = json.load(open('/opt/chasidish-dash/extra_users.json', encoding='utf-8'))
+        merged['users_list'].extend(u for u in _extra if not any(x.get('user') == u.get('user') and x.get('hash') == u.get('hash') for x in merged['users_list']))
+    except Exception as _e:
+        print('extra_users skipped:', _e)
     with open("docs/users.json", "w", encoding="utf-8") as f:
         json.dump(merged['users_list'], f, ensure_ascii=False)
 
