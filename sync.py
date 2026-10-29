@@ -441,6 +441,34 @@ def build_db(conn):
     }
 
 
+# --- מחירון מכירה לבוט הוואטסאפ (חסידיש אינה מתחזקת מלאי, לכן search.json ריק) ---
+# שאילתה קלה (בלי OnHand), ורצה רק כשהקובץ ישן מ-12 שעות — כדי לא להעמיס על ARNET.
+PRICES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'prices.json')  # מחוץ ל-docs: לא נחשף לאינטרנט
+PRICES_MAX_AGE = 12 * 3600
+
+
+def prices_stale():
+    try:
+        return (datetime.now().timestamp() - os.path.getmtime(PRICES_FILE)) > PRICES_MAX_AGE
+    except OSError:
+        return True
+
+
+def build_prices(conn, store_label):
+    cur = conn.cursor()
+    rows = q(cur, """
+        SELECT im.Name, im.BarcodeNumber, d.Name AS Department, MAX(ist.Price) AS SellPrice
+        FROM ItemMain im
+        JOIN ItemStore ist ON ist.ItemID = im.ItemID
+        LEFT JOIN Department d ON im.DepartmentID1 = d.DepartmentID
+        WHERE im.Status = 1 AND ist.Price > 0
+          AND im.Name NOT LIKE N'%כללי%'
+        GROUP BY im.Name, im.BarcodeNumber, d.Name
+    """)
+    return [{'n': (r['Name'] or '').strip(), 'b': r['BarcodeNumber'] or '', 'd': r['Department'] or '',
+             'sp': float(r['SellPrice'] or 0), 'st': store_label} for r in rows]
+
+
 def relabel(part, label):
     """מתייג סניף כחנות עצמאית בשם התווית, כדי שלא יתנגש עם סניפים אחרים."""
     for s in part['store_summary']:
@@ -461,11 +489,18 @@ def relabel(part, label):
 def main():
     merged = {'store_summary': [], 'low_stock': [], 'by_department': [],
               'search_items': [], 'report_items': [], 'sales_items': [], 'users_list': []}
+    do_prices = prices_stale()
+    price_items = []
     for cfg in DATABASES:
         print(f"Connecting to {cfg['name']}@{cfg['server']} ...")
         conn = _connect(cfg)
         try:
             part = build_db(conn)
+            if do_prices:
+                try:
+                    price_items.extend(build_prices(conn, cfg.get('label') or 'חסידיש'))
+                except Exception as e:
+                    print('  prices skipped:', e)
         finally:
             try: conn.close()
             except Exception: pass
@@ -506,6 +541,14 @@ def main():
         print('extra_users skipped:', _e)
     with open("docs/users.json", "w", encoding="utf-8") as f:
         json.dump(merged['users_list'], f, ensure_ascii=False)
+
+    if do_prices and price_items:
+        os.makedirs(os.path.dirname(PRICES_FILE), exist_ok=True)
+        tmp = PRICES_FILE + '.tmp'
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({'synced': datetime.now().strftime("%d/%m/%Y %H:%M"), 'items': price_items}, f, ensure_ascii=False)
+        os.replace(tmp, PRICES_FILE)
+        print(f"  prices: {len(price_items)} items")
 
     print(f"Done. {len(merged['search_items'])} search | {len(merged['report_items'])} report | {len(merged['sales_items'])} sales rows")
     for s in merged['store_summary']:
