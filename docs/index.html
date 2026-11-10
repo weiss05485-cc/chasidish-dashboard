@@ -6196,5 +6196,21 @@ function clearAllOrders() {
   renderOrdersPage();
 }
 </script>
+<script>/* shimon-portal-autologin:start */
+(function(){var P='https://shimon.chasidim-center.co.il';if(window.parent===window)return;
+var C=null,tries=0,busy=false;
+function vis(id){var e=document.getElementById(id);return !!e&&e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden';}
+function setv(id,v){var e=document.getElementById(id);if(!e)return;e.removeAttribute('readonly');e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));}
+async function run(c){
+      if(vis('gate-phase')){setv('gate-pass',c.gate);await submitGate();}
+      if(vis('user-phase')){setv('login-user',c.u);setv('login-pass',c.p);await doLogin();}
+}
+async function tick(){if(!C||busy)return;if(!vis('login-overlay')){tries=0;return;}if(tries>=3)return;busy=true;tries++;try{await run(C);}catch(e){}busy=false;}
+addEventListener('message',function(e){if(e.origin!==P||!e.data||e.data.t!=='cc-creds')return;C=e.data.c;tick();});
+setInterval(tick,4000);
+function ready(){try{parent.postMessage({t:'cc-ready'},P);}catch(e){}}
+if(document.readyState==='complete')setTimeout(ready,300);else addEventListener('load',function(){setTimeout(ready,300);});
+})();
+/* shimon-portal-autologin:end */</script>
 </body>
 </html>
