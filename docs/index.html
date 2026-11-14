@@ -224,6 +224,8 @@ th.sort-desc::after{content:' ↓';color:var(--primary)}
   th,td{padding:7px 8px;font-size:12px}
   nav{display:none}
   body{padding-top:86px;padding-bottom:64px}
+  #today-grid{grid-template-columns:1fr!important}
+  #today-period-grid{grid-template-columns:1fr!important}
 }
 
 /* BOTTOM NAV (mobile only) */
@@ -1038,14 +1040,17 @@ body.emp-mode .price-col{display:none!important}
       <div id="today-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
         <div class="section">
           <div class="section-header"><h3>לפי מחלקה</h3></div>
+          <div class="chart-wrap" style="height:200px;padding:10px 12px 0"><canvas id="today-dept-chart"></canvas></div>
           <div id="today-dept-list" style="padding:4px 0"></div>
         </div>
         <div class="section">
           <div class="section-header"><h3>לפי מוכר</h3></div>
+          <div class="chart-wrap" style="height:200px;padding:10px 12px 0"><canvas id="today-seller-chart"></canvas></div>
           <div id="today-seller-list" style="padding:4px 0"></div>
         </div>
         <div class="section">
           <div class="section-header"><h3>💳 אמצעי תשלום</h3></div>
+          <div class="chart-wrap" style="height:240px;padding:10px 12px 0"><canvas id="today-pay-chart"></canvas></div>
           <div id="today-payment-list" style="padding:4px 0"></div>
         </div>
       </div>
@@ -1703,12 +1708,12 @@ function renderTodayPeriodSub() {
 
   const totalCard = `<div class="kpi-card" style="border:2px solid var(--navy)">
     <div class="kpi-label" style="color:var(--navy);font-weight:700">סה"כ</div>
-    <div class="kpi-value" style="color:var(--navy);font-size:20px">${fmt(agg.totalSales)}</div>
+    <div class="kpi-value" style="color:var(--navy);font-size:20px" data-count="${_showExVAT ? agg.totalSales/1.18 : agg.totalSales}">${fmt(agg.totalSales)}</div>
     <div class="kpi-sub">${agg.totalTrans.toLocaleString()} עסקאות | ${agg.days} ימים</div>
   </div>`;
   const storeCards = agg.stores.map(s => `<div class="kpi-card">
     <div class="kpi-label">${s.name}</div>
-    <div class="kpi-value" style="color:var(--green);font-size:19px">${fmt(s.sales)}</div>
+    <div class="kpi-value" style="color:var(--green);font-size:19px" data-count="${_showExVAT ? s.sales/1.18 : s.sales}">${fmt(s.sales)}</div>
     <div class="kpi-sub">${s.trans.toLocaleString()} עסקאות</div>
   </div>`).join('');
 
@@ -1716,12 +1721,12 @@ function renderTodayPeriodSub() {
   const _sr = _simplyRange(from, to);
   const simplyCard = _sr.gross > 0 ? `<div class="kpi-card" style="border:2px solid #6366f1;background:linear-gradient(135deg,#eef2ff,#faf5ff)">
     <div class="kpi-label" style="font-weight:700;color:#6366f1">🎁 גיפטקארד סימפלי</div>
-    <div class="kpi-value" style="color:#6366f1;font-size:20px">${fmt(_sr.net != null ? _sr.net : _sr.gross)}</div>
+    <div class="kpi-value" style="color:#6366f1;font-size:20px" data-count="${_showExVAT ? (_sr.net != null ? _sr.net : _sr.gross)/1.18 : (_sr.net != null ? _sr.net : _sr.gross)}">${fmt(_sr.net != null ? _sr.net : _sr.gross)}</div>
     <div class="kpi-sub">${_sr.net != null ? 'נטו אחרי הנחה · ברוטו ' + fmt(_sr.gross) : 'ברוטו'}</div>
   </div>
   <div class="kpi-card" style="border:2px solid #4f46e5;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
     <div class="kpi-label" style="font-weight:700;color:#4f46e5">סה"כ כולל סימפלי</div>
-    <div class="kpi-value" style="color:#4f46e5;font-size:20px">${fmt(agg.totalSales + (_sr.net != null ? _sr.net : _sr.gross))}</div>
+    <div class="kpi-value" style="color:#4f46e5;font-size:20px" data-count="${_showExVAT ? (agg.totalSales + (_sr.net != null ? _sr.net : _sr.gross))/1.18 : (agg.totalSales + (_sr.net != null ? _sr.net : _sr.gross))}">${fmt(agg.totalSales + (_sr.net != null ? _sr.net : _sr.gross))}</div>
     <div class="kpi-sub">מכירות + סימפלי ${_sr.net != null ? 'נטו' : 'ברוטו'}</div>
   </div>` : '';
 
@@ -1733,11 +1738,19 @@ function renderTodayPeriodSub() {
 
   document.getElementById('today-period-results').innerHTML = `
     <div class="kpi-grid" style="margin-bottom:20px">${totalCard}${storeCards}${simplyCard}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
-      <div class="section"><div class="section-header"><h3>לפי מחלקה</h3></div><div style="padding:4px 0">${deptList}</div></div>
-      <div class="section"><div class="section-header"><h3>💳 אמצעי תשלום</h3></div><div style="padding:4px 0">${payList}</div></div>
-      <div class="section"><div class="section-header"><h3>לפי מוכר</h3></div><div style="padding:4px 0">${sellerList}</div></div>
+    <div id="today-period-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
+      <div class="section"><div class="section-header"><h3>לפי מחלקה</h3></div>
+        <div class="chart-wrap" style="height:210px;padding:10px 12px 0"><canvas id="period-dept-chart"></canvas></div>
+        <div style="padding:4px 0">${deptList}</div></div>
+      <div class="section"><div class="section-header"><h3>💳 אמצעי תשלום</h3></div>
+        <div class="chart-wrap" style="height:250px;padding:10px 12px 0"><canvas id="period-pay-chart"></canvas></div>
+        <div style="padding:4px 0">${payList}</div></div>
+      <div class="section"><div class="section-header"><h3>לפי מוכר</h3></div>
+        <div class="chart-wrap" style="height:210px;padding:10px 12px 0"><canvas id="period-seller-chart"></canvas></div>
+        <div style="padding:4px 0">${sellerList}</div></div>
     </div>`;
+  document.querySelectorAll('#today-period-results .kpi-value[data-count]').forEach(_cntToday);
+  _renderPeriodViz(agg);
 }
 
 function todayPickDate(val) {
@@ -1936,26 +1949,27 @@ function _renderTodayContent() {
     const col = s.TotalSales > 0 ? 'var(--green)' : 'var(--muted)';
     return `<div class="kpi-card">
       <div class="kpi-label">${s.StoreName}</div>
-      <div class="kpi-value" style="color:${col};font-size:19px">${fmt(s.TotalSales)}</div>
+      <div class="kpi-value" style="color:${col};font-size:19px" data-count="${_showExVAT ? s.TotalSales/1.18 : s.TotalSales}">${fmt(s.TotalSales)}</div>
       <div class="kpi-sub">${s.Transactions} עסקאות</div>
     </div>`;
   }).join('');
   document.getElementById('today-store-cards').innerHTML = (storeHtml || '<div style="color:var(--muted);padding:12px">אין נתונים לתאריך זה</div>') +
     (totSales > 0 ? `<div class="kpi-card" style="border:2px solid var(--navy)">
       <div class="kpi-label" style="font-weight:700">סה"כ מכירות</div>
-      <div class="kpi-value" style="color:var(--navy);font-size:21px">${fmt(totSales)}</div>
+      <div class="kpi-value" style="color:var(--navy);font-size:21px" data-count="${_showExVAT ? totSales/1.18 : totSales}">${fmt(totSales)}</div>
       <div class="kpi-sub">${totTrans} עסקאות</div>
     </div>` : '') +
     (simplyInfo && simplyInfo.gross > 0 ? `<div class="kpi-card" style="border:2px solid #6366f1;background:linear-gradient(135deg,#eef2ff,#faf5ff)">
       <div class="kpi-label" style="font-weight:700;color:#6366f1">🎁 גיפטקארד סימפלי</div>
-      <div class="kpi-value" style="color:#6366f1;font-size:21px">${fmt(simplyInfo.net != null ? simplyInfo.net : simplyInfo.gross)}</div>
+      <div class="kpi-value" style="color:#6366f1;font-size:21px" data-count="${_showExVAT ? (simplyInfo.net != null ? simplyInfo.net : simplyInfo.gross)/1.18 : (simplyInfo.net != null ? simplyInfo.net : simplyInfo.gross)}">${fmt(simplyInfo.net != null ? simplyInfo.net : simplyInfo.gross)}</div>
       <div class="kpi-sub">${simplyInfo.net != null ? 'נטו אחרי הנחה · ברוטו ' + fmt(simplyInfo.gross) : 'ברוטו'}${simplyStale ? ' · מהמטמון' : ''}</div>
     </div>` : '') +
     (totSales > 0 && simplyInfo && simplyInfo.net != null && simplyInfo.net > 0 ? `<div class="kpi-card" style="border:2px solid #4f46e5;background:linear-gradient(135deg,#eef2ff,#e0e7ff)">
       <div class="kpi-label" style="font-weight:700;color:#4f46e5">סה"כ כולל סימפלי</div>
-      <div class="kpi-value" style="color:#4f46e5;font-size:21px">${fmt(totSales + simplyInfo.net)}</div>
+      <div class="kpi-value" style="color:#4f46e5;font-size:21px" data-count="${_showExVAT ? (totSales + simplyInfo.net)/1.18 : (totSales + simplyInfo.net)}">${fmt(totSales + simplyInfo.net)}</div>
       <div class="kpi-sub">מכירות + סימפלי נטו (אחרי הנחה)</div>
     </div>` : '');
+  document.querySelectorAll('#today-store-cards .kpi-value[data-count]').forEach(_cntToday);
 
   // מחלקות
   const deptTotal = dayData.depts.reduce((s,r) => s + r.TotalSales, 0);
@@ -2035,7 +2049,121 @@ function _renderTodayContent() {
   document.getElementById('today-payment-list').innerHTML = payFilter + payHtml + simplyLine;
 
   // גרף
+  _renderTodayViz(dayData, pays, payTotal);
   _renderTodayChart();
+}
+
+// ── עוזרי גרפים (הועתקו מחסידים סנטר) — מראה בלבד ──
+function ccEdge(){return document.documentElement.getAttribute('data-theme')==='dark'?'#241d3e':'#ffffff';}
+function ccTrack(){return document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,.08)':'rgba(118,106,170,.14)';}
+function ccLG(ctx,c0,c1,horiz){var g=ctx.createLinearGradient(0,0,horiz?300:0,horiz?0:230);g.addColorStop(0,c0);g.addColorStop(1,c1);return g;}
+var CC_PAIRS=[['#6366f1','#a855f7'],['#ec4899','#f472b6'],['#38bdf8','#22d3ee'],['#fbbf24','#ea580c'],['#34d399','#059669'],['#c084fc','#7c3aed']];
+function ccCenter(getText,getSub){return {id:'ccctr'+Math.random().toString(36).slice(2),afterDraw:function(ch){var a=ch.chartArea;if(!a)return;var x=(a.left+a.right)/2,y=(a.top+a.bottom)/2,c=ch.ctx;var st=getComputedStyle(document.documentElement);var ink=(st.getPropertyValue('--text')||'#1b1533').trim(),mu=(st.getPropertyValue('--muted')||'#6b6490').trim();c.save();c.textAlign='center';c.textBaseline='middle';c.fillStyle=ink;c.font='900 26px Rubik';c.fillText(getText(),x,y-3);var sub=getSub&&getSub();if(sub){c.fillStyle=mu;c.font='600 11px Rubik';c.fillText(sub,x,y+17);}c.restore();}};}
+function _hefmt(n){return Number(n||0).toLocaleString('he-IL');}
+try{ if(typeof Chart!=='undefined'){ Chart.defaults.font.family="'Rubik',sans-serif"; } }catch(e){}
+
+// מספרים שרצים (מכבד prefers-reduced-motion)
+function _cntToday(el){
+  var to=parseFloat(el.getAttribute('data-count')); if(isNaN(to))return;
+  var finalTxt=el.textContent;
+  try{ if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
+  var t0=performance.now(), dur=900;
+  function step(now){var p=Math.min((now-t0)/dur,1), e=1-Math.pow(1-p,3);
+    el.textContent='₪'+Math.round(to*e).toLocaleString('he-IL');
+    if(p<1) requestAnimationFrame(step); else el.textContent=finalTxt;}
+  requestAnimationFrame(step);
+}
+
+// ── גרפים חיים לקופות — יום בודד (dayData.depts/sellers + pays) — מראה בלבד ──
+var _todayDeptChart=null,_todaySellerChart=null,_todayPayChart=null;
+function _renderTodayViz(dayData, pays, payTotal){
+  if(typeof Chart==='undefined') return;
+  var ex = _showExVAT ? function(v){return v/1.18;} : function(v){return v;};
+  var dEl=document.getElementById('today-dept-chart');
+  if(dEl){ var dctx=dEl.getContext('2d'); if(_todayDeptChart)_todayDeptChart.destroy();
+    var dTop=(dayData.depts||[]).filter(function(r){return r.TotalSales>0;}).slice(0,8);
+    if(dTop.length){ _todayDeptChart=new Chart(dctx,{type:'bar',
+      data:{labels:dTop.map(function(r){return r.Dept;}),datasets:[{data:dTop.map(function(r){return Math.round(ex(r.TotalSales));}),
+        backgroundColor:ccLG(dctx,'#8b5cf6','#ec4899',true),hoverBackgroundColor:ccLG(dctx,'#a855f7','#f472b6',true),
+        borderRadius:8,borderSkipped:false,maxBarThickness:22}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:1100,easing:'easeOutQuart'},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' ₪'+_hefmt(c.raw);}}}},
+        scales:{x:{grid:{color:ccTrack()},border:{display:false},ticks:{callback:function(v){return '₪'+(v>=1000?Math.round(v/1000)+'K':v);},font:{size:10}}},
+          y:{grid:{display:false},border:{display:false},ticks:{font:{size:11,weight:'600'}}}}}}); }
+  }
+  var sEl=document.getElementById('today-seller-chart');
+  if(sEl){ var sctx=sEl.getContext('2d'); if(_todaySellerChart)_todaySellerChart.destroy();
+    var med=['🥇','🥈','🥉'];
+    var sTop=(dayData.sellers||[]).filter(function(r){return r.TotalSales>0;}).slice(0,8);
+    if(sTop.length){ _todaySellerChart=new Chart(sctx,{type:'bar',
+      data:{labels:sTop.map(function(r,i){return (med[i]||'')+' '+r.SellerName;}),datasets:[{data:sTop.map(function(r){return Math.round(ex(r.TotalSales));}),
+        backgroundColor:sTop.map(function(r,i){return ccLG(sctx,CC_PAIRS[i%CC_PAIRS.length][0],CC_PAIRS[i%CC_PAIRS.length][1],true);}),
+        borderRadius:8,borderSkipped:false,maxBarThickness:20}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart'},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' ₪'+_hefmt(c.raw);}}}},
+        scales:{x:{grid:{color:ccTrack()},border:{display:false},ticks:{callback:function(v){return '₪'+(v>=1000?Math.round(v/1000)+'K':v);},font:{size:10}}},
+          y:{grid:{display:false},border:{display:false},ticks:{font:{size:11,weight:'600'}}}}}}); }
+  }
+  var pEl=document.getElementById('today-pay-chart');
+  if(pEl){ var pctx=pEl.getContext('2d'); if(_todayPayChart)_todayPayChart.destroy();
+    var payIcon=function(m){ return (m.indexOf('אשראי')>=0||m.indexOf('כארד')>=0||m.indexOf('קרדיט')>=0)?'💳':m.indexOf('מזומן')>=0?'💵':(m.indexOf('צ\'ק')>=0||m.indexOf('צק')>=0)?'📄':m.indexOf('ביט')>=0?'📱':m.indexOf('העברה')>=0?'🏦':'💰'; };
+    var pTop=(pays||[]).filter(function(r){return r.TotalAmount>0;});
+    if(pTop.length){ var pTot=pTop.reduce(function(a,r){return a+ex(r.TotalAmount);},0);
+      _todayPayChart=new Chart(pctx,{type:'doughnut',
+        data:{labels:pTop.map(function(r){return payIcon(r.PayMethod)+' '+r.PayMethod;}),datasets:[{data:pTop.map(function(r){return Math.round(ex(r.TotalAmount));}),
+          backgroundColor:pTop.map(function(r,i){return ccLG(pctx,CC_PAIRS[i%CC_PAIRS.length][0],CC_PAIRS[i%CC_PAIRS.length][1]);}),
+          borderColor:ccEdge(),borderWidth:3,borderRadius:8,hoverOffset:10}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',animation:{animateRotate:true,duration:1200,easing:'easeOutQuart'},
+          plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:10,font:{size:10}}},
+            tooltip:{callbacks:{label:function(c){return ' '+c.label+': ₪'+_hefmt(c.raw)+' ('+(pTot>0?(c.raw/pTot*100).toFixed(1):0)+'%)';}}}}},
+        plugins:[ccCenter(function(){return '₪'+_hefmt(Math.round(pTot));},function(){return 'סה״כ תשלומים';})]}); }
+  }
+}
+
+// ── אותם גרפים, למצב "תקופה" (agg: name/sales) — מראה בלבד ──
+var _periodDeptChart=null,_periodSellerChart=null,_periodPayChart=null;
+function _renderPeriodViz(agg){
+  if(typeof Chart==='undefined'||!agg) return;
+  var ex = _showExVAT ? function(v){return v/1.18;} : function(v){return v;};
+  var dEl=document.getElementById('period-dept-chart');
+  if(dEl){ var dctx=dEl.getContext('2d'); if(_periodDeptChart)_periodDeptChart.destroy();
+    var dTop=(agg.depts||[]).filter(function(r){return r.sales>0;}).slice(0,8);
+    if(dTop.length){ _periodDeptChart=new Chart(dctx,{type:'bar',
+      data:{labels:dTop.map(function(r){return r.name;}),datasets:[{data:dTop.map(function(r){return Math.round(ex(r.sales));}),
+        backgroundColor:ccLG(dctx,'#8b5cf6','#ec4899',true),hoverBackgroundColor:ccLG(dctx,'#a855f7','#f472b6',true),
+        borderRadius:8,borderSkipped:false,maxBarThickness:22}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:1100,easing:'easeOutQuart'},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' ₪'+_hefmt(c.raw);}}}},
+        scales:{x:{grid:{color:ccTrack()},border:{display:false},ticks:{callback:function(v){return '₪'+(v>=1000?Math.round(v/1000)+'K':v);},font:{size:10}}},
+          y:{grid:{display:false},border:{display:false},ticks:{font:{size:11,weight:'600'}}}}}}); }
+  }
+  var sEl=document.getElementById('period-seller-chart');
+  if(sEl){ var sctx=sEl.getContext('2d'); if(_periodSellerChart)_periodSellerChart.destroy();
+    var med=['🥇','🥈','🥉'];
+    var sTop=(agg.sellers||[]).filter(function(r){return r.sales>0;}).slice(0,8);
+    if(sTop.length){ _periodSellerChart=new Chart(sctx,{type:'bar',
+      data:{labels:sTop.map(function(r,i){return (med[i]||'')+' '+r.name;}),datasets:[{data:sTop.map(function(r){return Math.round(ex(r.sales));}),
+        backgroundColor:sTop.map(function(r,i){return ccLG(sctx,CC_PAIRS[i%CC_PAIRS.length][0],CC_PAIRS[i%CC_PAIRS.length][1],true);}),
+        borderRadius:8,borderSkipped:false,maxBarThickness:20}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:1200,easing:'easeOutQuart'},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' ₪'+_hefmt(c.raw);}}}},
+        scales:{x:{grid:{color:ccTrack()},border:{display:false},ticks:{callback:function(v){return '₪'+(v>=1000?Math.round(v/1000)+'K':v);},font:{size:10}}},
+          y:{grid:{display:false},border:{display:false},ticks:{font:{size:11,weight:'600'}}}}}}); }
+  }
+  var pEl=document.getElementById('period-pay-chart');
+  if(pEl){ var pctx=pEl.getContext('2d'); if(_periodPayChart)_periodPayChart.destroy();
+    var payIcon=function(m){ return (m.indexOf('אשראי')>=0||m.indexOf('כארד')>=0||m.indexOf('קרדיט')>=0)?'💳':m.indexOf('מזומן')>=0?'💵':(m.indexOf('צ\'ק')>=0||m.indexOf('צק')>=0)?'📄':m.indexOf('ביט')>=0?'📱':m.indexOf('העברה')>=0?'🏦':'💰'; };
+    var pTop=(agg.payments||[]).filter(function(r){return r.sales>0;});
+    if(pTop.length){ var pTot=pTop.reduce(function(a,r){return a+ex(r.sales);},0);
+      _periodPayChart=new Chart(pctx,{type:'doughnut',
+        data:{labels:pTop.map(function(r){return payIcon(r.name)+' '+r.name;}),datasets:[{data:pTop.map(function(r){return Math.round(ex(r.sales));}),
+          backgroundColor:pTop.map(function(r,i){return ccLG(pctx,CC_PAIRS[i%CC_PAIRS.length][0],CC_PAIRS[i%CC_PAIRS.length][1]);}),
+          borderColor:ccEdge(),borderWidth:3,borderRadius:8,hoverOffset:10}]},
+        options:{responsive:true,maintainAspectRatio:false,cutout:'62%',animation:{animateRotate:true,duration:1200,easing:'easeOutQuart'},
+          plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:10,font:{size:10}}},
+            tooltip:{callbacks:{label:function(c){return ' '+c.label+': ₪'+_hefmt(c.raw)+' ('+(pTot>0?(c.raw/pTot*100).toFixed(1):0)+'%)';}}}}},
+        plugins:[ccCenter(function(){return '₪'+_hefmt(Math.round(pTot));},function(){return 'סה״כ תשלומים';})]}); }
+  }
 }
 
 function _renderTodayChart() {
