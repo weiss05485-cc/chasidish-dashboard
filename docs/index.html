@@ -1039,6 +1039,11 @@ body.emp-mode .price-col{display:none!important}
       <!-- Dept + Seller + Payments -->
       <div id="today-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
         <div class="section">
+          <div class="section-header"><h3>💳 אמצעי תשלום</h3></div>
+          <div class="chart-wrap" style="height:240px;padding:10px 12px 0"><canvas id="today-pay-chart"></canvas></div>
+          <div id="today-payment-list" style="padding:4px 0"></div>
+        </div>
+        <div class="section">
           <div class="section-header"><h3>לפי מחלקה</h3></div>
           <div class="chart-wrap" style="height:200px;padding:10px 12px 0"><canvas id="today-dept-chart"></canvas></div>
           <div id="today-dept-list" style="padding:4px 0"></div>
@@ -1047,11 +1052,6 @@ body.emp-mode .price-col{display:none!important}
           <div class="section-header"><h3>לפי מוכר</h3></div>
           <div class="chart-wrap" style="height:200px;padding:10px 12px 0"><canvas id="today-seller-chart"></canvas></div>
           <div id="today-seller-list" style="padding:4px 0"></div>
-        </div>
-        <div class="section">
-          <div class="section-header"><h3>💳 אמצעי תשלום</h3></div>
-          <div class="chart-wrap" style="height:240px;padding:10px 12px 0"><canvas id="today-pay-chart"></canvas></div>
-          <div id="today-payment-list" style="padding:4px 0"></div>
         </div>
       </div>
       <!-- Chart -->
@@ -1739,12 +1739,12 @@ function renderTodayPeriodSub() {
   document.getElementById('today-period-results').innerHTML = `
     <div class="kpi-grid" style="margin-bottom:20px">${totalCard}${storeCards}${simplyCard}</div>
     <div id="today-period-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
-      <div class="section"><div class="section-header"><h3>לפי מחלקה</h3></div>
-        <div class="chart-wrap" style="height:210px;padding:10px 12px 0"><canvas id="period-dept-chart"></canvas></div>
-        <div style="padding:4px 0">${deptList}</div></div>
       <div class="section"><div class="section-header"><h3>💳 אמצעי תשלום</h3></div>
         <div class="chart-wrap" style="height:250px;padding:10px 12px 0"><canvas id="period-pay-chart"></canvas></div>
         <div style="padding:4px 0">${payList}</div></div>
+      <div class="section"><div class="section-header"><h3>לפי מחלקה</h3></div>
+        <div class="chart-wrap" style="height:210px;padding:10px 12px 0"><canvas id="period-dept-chart"></canvas></div>
+        <div style="padding:4px 0">${deptList}</div></div>
       <div class="section"><div class="section-header"><h3>לפי מוכר</h3></div>
         <div class="chart-wrap" style="height:210px;padding:10px 12px 0"><canvas id="period-seller-chart"></canvas></div>
         <div style="padding:4px 0">${sellerList}</div></div>
